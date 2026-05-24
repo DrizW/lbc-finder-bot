@@ -3,23 +3,13 @@ import lbc
 
 from .handler import handle
 
-location = lbc.City(
-    lat=48.85994982004764,
-    lng=2.33801967847424,
-    radius=10_000,  # 10 km
-    city="Paris",
-)
-
 CONFIG = [
     Search(
-        name="Location Paris",
+        name="Poussette Cybex",
         parameters=Parameters(
-            text="maison",
-            locations=[location],
-            category=lbc.Category.IMMOBILIER,
-            square=[200, 400],
+            text="poussette cybex",
         ),
-        delay=60 * 5,  # Check every 5 minutes
+        delay=60,  # Check every 1 minute for better reactivity
         handler=handle,
     ),
 ]
