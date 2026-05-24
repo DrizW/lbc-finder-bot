@@ -11,25 +11,27 @@ def build_searches_from_settings() -> list[Search]:
     searches = []
     for name, cfg in settings.items():
         if not isinstance(cfg, dict):
-            # Ancienne structure (simple int) : on ignore
+            continue
+
+        # Skip paused searches at startup
+        if cfg.get("paused", False):
+            print(f"[Startup] ⏸️ Niche '{name}' en pause — ignorée au démarrage.")
             continue
 
         params_kwargs = {"text": cfg.get("keywords", name)}
 
-        lat = cfg.get("lat")
-        lng = cfg.get("lng")
-        city = cfg.get("city", "")
-        radius_km = cfg.get("radius_km", 20)
-
-        if lat and lng:
+        if cfg.get("lat") and cfg.get("lng"):
             params_kwargs["locations"] = [
                 lbc.City(
-                    lat=lat,
-                    lng=lng,
-                    radius=radius_km * 1000,
-                    city=city,
+                    lat=cfg["lat"],
+                    lng=cfg["lng"],
+                    radius=cfg.get("radius_km", 20) * 1000,
+                    city=cfg.get("city", ""),
                 )
             ]
+
+        if cfg.get("owner_type") == "private":
+            params_kwargs["owner_type"] = lbc.OwnerType.PRIVATE
 
         searches.append(
             Search(
@@ -46,7 +48,7 @@ def main() -> None:
     initial_searches = build_searches_from_settings()
     searcher = Searcher(searches=initial_searches)
 
-    # Inject searcher into bot so /addsearch and /delsearch can control it live
+    # Inject searcher into bot so /addsearch, /delsearch, /pause, /resume can control it live
     set_searcher(searcher)
 
     searcher.start()
