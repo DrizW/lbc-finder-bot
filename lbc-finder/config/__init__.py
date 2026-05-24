@@ -1,15 +1,10 @@
-from model import Search, Parameters
-import lbc
+# Config is now fully dynamic — searches are managed via Discord commands:
+#   /addsearch  — ajouter une niche
+#   /delsearch  — supprimer une niche
+#   /listsearches — lister les niches actives
+#
+# This file is kept for import compatibility only.
 
-from .handler import handle
+from .handler import handle  # noqa: F401
 
-CONFIG = [
-    Search(
-        name="Poussette Cybex",
-        parameters=Parameters(
-            text="poussette cybex",
-        ),
-        delay=60,  # Check every 1 minute for better reactivity
-        handler=handle,
-    ),
-]
+CONFIG = []  # Empty — loaded dynamically from settings.json at startup

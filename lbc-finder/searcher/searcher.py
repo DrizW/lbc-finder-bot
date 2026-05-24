@@ -10,11 +10,13 @@ import threading
 class Searcher:
     def __init__(
         self,
-        searches: list[Search] | Search,
+        searches: list[Search] | Search | None = None,
         request_verify: bool = True,
         handler_max_attempts: int = 3,
         handler_initial_backoff: float = 2.0,
     ):
+        if searches is None:
+            searches = []
         self._searches: list[Search] = (
             searches if isinstance(searches, list) else [searches]
         )
@@ -22,6 +24,9 @@ class Searcher:
         self._handler_max_attempts = handler_max_attempts
         self._handler_initial_backoff = handler_initial_backoff
         self._id = ID()
+        self._threads: dict[str, threading.Thread] = {}
+        self._stop_events: dict[str, threading.Event] = {}
+        self._lock = threading.Lock()
 
     def _handle_with_retry(self, search: Search, ad) -> bool:
         for attempt in range(1, self._handler_max_attempts + 1):
@@ -43,19 +48,19 @@ class Searcher:
                 time.sleep(delay)
         return False
 
-    def _search(self, search: Search) -> None:
+    def _search(self, search: Search, stop_event: threading.Event) -> None:
         client = Client(proxy=search.proxy, request_verify=self._request_verify)
-        while True:
+        while not stop_event.is_set():
             before = time.time()
             try:
                 response = client.search(**search.parameters._kwargs, sort=Sort.NEWEST)
                 logger.debug(
-                    f"Successfully found {response.total} ad{'s' if response.total > 1 else ''}."
+                    f"[{search.name}] {response.total} annonce(s) trouvée(s)."
                 )
                 ads = [ad for ad in response.ads if not self._id.contains(ad.id)]
-                if len(ads):
+                if ads:
                     logger.info(
-                        f"Successfully found {len(ads)} new ad{'s' if len(ads) > 1 else ''}!"
+                        f"[{search.name}] {len(ads)} nouvelle(s) annonce(s) !"
                     )
 
                 notified = 0
@@ -63,28 +68,58 @@ class Searcher:
                     if self._handle_with_retry(search, ad) and self._id.add(ad.id):
                         notified += 1
 
-                if len(ads) and notified != len(ads):
+                if ads and notified != len(ads):
                     logger.warning(
-                        f"[{search.name}] {len(ads) - notified} ad{'s were' if len(ads) - notified > 1 else ' was'} not marked as seen and will be retried."
+                        f"[{search.name}] {len(ads) - notified} annonce(s) non marquée(s), elles seront retraitées."
                     )
             except Exception:
-                logger.exception("An error occured.")
-            time.sleep(
-                search.delay - (time.time() - before)
-                if search.delay - (time.time() - before) > 0
-                else 0
+                logger.exception(f"[{search.name}] Erreur lors de la recherche.")
+
+            elapsed = time.time() - before
+            wait = max(0, search.delay - elapsed)
+            # Sleep in small chunks so the stop_event is checked regularly
+            stop_event.wait(timeout=wait)
+
+    def add_search_thread(self, search: Search) -> bool:
+        """Adds (or replaces) a search thread at runtime without restarting."""
+        with self._lock:
+            # Stop existing thread for this niche if it exists
+            self.remove_search_thread(search.name)
+
+            stop_event = threading.Event()
+            t = threading.Thread(
+                target=self._search,
+                args=(search, stop_event),
+                name=search.name,
+                daemon=True,
             )
+            self._stop_events[search.name] = stop_event
+            self._threads[search.name] = t
+            t.start()
+            logger.info(f"[{search.name}] Thread de recherche démarré.")
+            return True
+
+    def remove_search_thread(self, name: str) -> bool:
+        """Stops the search thread for a given niche name."""
+        with self._lock:
+            if name in self._stop_events:
+                self._stop_events[name].set()
+                del self._stop_events[name]
+            if name in self._threads:
+                del self._threads[name]
+                logger.info(f"[{name}] Thread de recherche arrêté.")
+                return True
+        return False
 
     def start(self) -> bool:
-        if not len(self._searches):
+        if not self._searches:
             logger.warning(
-                "No search rules have been set. Please create search rules in config.py (see example in README.md)."
+                "Aucune niche configurée au démarrage. "
+                "Utilisez /addsearch dans Discord pour en ajouter."
             )
-            return False
+            return True  # Not an error — Discord commands will add them
 
         for search in self._searches:
-            threading.Thread(
-                target=self._search, args=(search,), name=search.name
-            ).start()
-            time.sleep(5)  # Add latency between each thread to prevent spam
+            self.add_search_thread(search)
+            time.sleep(2)  # Stagger thread starts to avoid request spam
         return True
