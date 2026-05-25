@@ -4,21 +4,20 @@ import lbc
 from .handler import handle
 
 location = lbc.City(
-    lat=48.85994982004764,
-    lng=2.33801967847424,
-    radius=10_000,  # 10 km
-    city="Paris",
+    lat=44.837789,
+    lng=-0.57918,
+    radius=20_000,  # 20 km
+    city="Bordeaux",
 )
 
 CONFIG = [
     Search(
-        name="Location Paris",
+        name="Porsche 944 Bordeaux",
         parameters=Parameters(
-            text="maison",
+            text="Porsche 944",
             locations=[location],
-            category=lbc.Category.IMMOBILIER,
-            square=[200, 400],
-            price=[300_000, 700_000],
+            category=lbc.Category.VEHICULES_VOITURES,
+            price=[0, 25_000],
         ),
         delay=60 * 5,  # Check every 5 minutes
         handler=handle,

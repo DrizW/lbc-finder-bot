@@ -26,7 +26,7 @@ class Searcher:
         self._id = ID()
         self._threads: dict[str, threading.Thread] = {}
         self._stop_events: dict[str, threading.Event] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def _handle_with_retry(self, search: Search, ad) -> bool:
         for attempt in range(1, self._handler_max_attempts + 1):
@@ -57,7 +57,11 @@ class Searcher:
                 logger.debug(
                     f"[{search.name}] {response.total} annonce(s) trouvée(s)."
                 )
-                ads = [ad for ad in response.ads if not self._id.contains(ad.id)]
+                ads = [
+                    ad
+                    for ad in response.ads
+                    if not self._id.contains(search.name, ad.id)
+                ]
                 if ads:
                     logger.info(
                         f"[{search.name}] {len(ads)} nouvelle(s) annonce(s) !"
@@ -65,7 +69,9 @@ class Searcher:
 
                 notified = 0
                 for ad in ads:
-                    if self._handle_with_retry(search, ad) and self._id.add(ad.id):
+                    if self._handle_with_retry(search, ad) and self._id.add(
+                        search.name, ad.id
+                    ):
                         notified += 1
 
                 if ads and notified != len(ads):
@@ -96,7 +102,11 @@ class Searcher:
             self._stop_events[search.name] = stop_event
             self._threads[search.name] = t
             t.start()
-            logger.info(f"[{search.name}] Thread de recherche démarré.")
+            logger.info(
+                "[%s] Thread de recherche démarré avec paramètres: %s",
+                search.name,
+                search.parameters._kwargs,
+            )
             return True
 
     def remove_search_thread(self, name: str) -> bool:
@@ -110,6 +120,10 @@ class Searcher:
                 logger.info(f"[{name}] Thread de recherche arrêté.")
                 return True
         return False
+
+    def active_searches(self) -> list[str]:
+        with self._lock:
+            return list(self._threads.keys())
 
     def start(self) -> bool:
         if not self._searches:

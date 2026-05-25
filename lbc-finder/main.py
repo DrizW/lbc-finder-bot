@@ -1,13 +1,14 @@
 from model import Search, Parameters
 from searcher import Searcher
 from config.handler import handle
-from bot import load_settings, set_searcher, start_bot
+from bot import get_settings_path, load_settings, set_searcher, start_bot
 import lbc
 
 
 def build_searches_from_settings() -> list[Search]:
     """Reconstruit les objets Search depuis le fichier settings.json au démarrage."""
     settings = load_settings()
+    print(f"[Startup] Configuration chargée depuis: {get_settings_path()}")
     searches = []
     for name, cfg in settings.items():
         if not isinstance(cfg, dict):
@@ -30,6 +31,10 @@ def build_searches_from_settings() -> list[Search]:
                 )
             ]
 
+        max_price = cfg.get("max_price")
+        if isinstance(max_price, (int, float)) and max_price > 0:
+            params_kwargs["price"] = [0, max_price]
+
         if cfg.get("owner_type") == "private":
             params_kwargs["owner_type"] = lbc.OwnerType.PRIVATE
 
@@ -41,6 +46,7 @@ def build_searches_from_settings() -> list[Search]:
                 handler=handle,
             )
         )
+        print(f"[Startup] ✅ Niche chargée: {name}")
     return searches
 
 

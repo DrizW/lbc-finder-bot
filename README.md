@@ -3,40 +3,8 @@
 
 **Stay notified when new ads appear on Leboncoin**
 
-```python
-from model import Search, Parameters
-import lbc
-
-def handle(ad: lbc.Ad, search_name: str):
-    print(f"[{search_name}] New ads!")
-    print(f"Title : {ad.subject}")
-    print(f"Price : {ad.price} €")
-    print(f"URL : {ad.url}")
-    print("-" * 40)
-
-location = lbc.City( 
-    lat=48.85994982004764,
-    lng=2.33801967847424,
-    radius=10_000, # 10 km
-    city="Paris"
-)
-
-CONFIG = [
-    Search(
-        name="Location Paris",
-        parameters=Parameters(
-            text="maison",
-            locations=[location],
-            category=lbc.Category.IMMOBILIER,
-            square=[200, 400],
-            price=[300_000, 700_000]
-        ),
-        delay=60 * 5, # Check every 5 minutes 
-        handler=handle
-    ),
-    ... # More
-]
-```
+This fork is configured from Discord slash commands. Searches are saved in
+`data/settings.json`, so there is no built-in "Paris" search in the runtime code.
 *lbc-finder is not affiliated with, endorsed by, or in any way associated with Leboncoin or its services. Use at your own risk.*
 
 This project uses [lbc](https://github.com/etienne-hd/lbc), an unofficial library to interact with Leboncoin API.
@@ -55,8 +23,8 @@ This project uses [lbc](https://github.com/etienne-hd/lbc), an unofficial librar
 Required **Python 3.10+**
 1. **Clone the repository**
     ```bash
-    git clone https://github.com/etienne-hd/lbc-finder.git
-    cd lbc-finder
+    git clone https://github.com/DrizW/lbc-finder-bot.git
+    cd lbc-finder-bot
     ```
 2. **Install dependencies**
     ```bash
@@ -72,17 +40,9 @@ Required **Python 3.10+**
 
 You can run **lbc-finder** using Docker without installing Python locally.
 
-### Pull the image
-
-The easiest way is to use the prebuilt image from Docker Hub:
-
-```bash
-docker pull etiennehode/lbc-finder:latest
-````
-
 ### Build locally
 
-If you prefer to build the image yourself:
+Build this fork locally before deployment so the Discord commands and LXC fixes are included:
 
 ```bash
 docker build -t lbc-finder .
@@ -93,17 +53,17 @@ docker build -t lbc-finder .
 ```bash
 docker run -d \
   --name lbc-finder \
+  --env-file .env \
   -v lbc_data:/app/data \
-  -v $(pwd)/config:/app/config \
-  etiennehode/lbc-finder:latest
+  lbc-finder
 ```
 
 ### Volumes
 
 | Path in container | Description                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------- |
-| `/app/config`     | Your search configuration files **and optional `requirements.txt`** for additional Python libraries |
-| `/app/data`       | Persistent storage for detected ads                                                                 |
+| `/app/config`     | Optional `requirements.txt` for additional Python libraries |
+| `/app/data`       | Persistent storage for searches, stats, detected ads and logs |
 
 Example:
 
@@ -111,7 +71,20 @@ Example:
 -v $(pwd)/config:/app/config
 ```
 
-This mounts your local `config/` folder into the container so you can easily edit your searches.
+Searches created with `/ajouter-niche` are stored in `/app/data/settings.json`.
+
+### LXC / Proxmox
+
+For a Proxmox LXC, keep one persistent data directory and point the bot to it:
+
+```env
+DISCORD_TOKEN=your_discord_bot_token
+DISCORD_CHANNEL_ID=your_alert_channel_id
+LBC_DATA_DIR=/opt/lbc-finder/data
+```
+
+After deploy, run `/diagnostic` to confirm the bot reads the expected
+`settings.json`, then run `/alerte-test` to confirm Discord delivery.
 
 > **Extra Python libraries:**
 > If your configuration requires additional Python packages, create a `requirements.txt` file inside your `config/` folder.
@@ -121,7 +94,7 @@ This mounts your local `config/` folder into the container so you can easily edi
 #!/bin/sh
 if [ -e config/requirements.txt ]
 then
-    pip install --no-cache-dir -r config/requirements.txt
+    uv add -r config/requirements.txt
 fi
 
 exec "$@"
@@ -131,40 +104,47 @@ This way, you can extend the container with any Python library you need without 
 
 
 ## Configuration
-A [config](lbc-finder/config/__init__.py) file is provided by default in the project, it contains a basic configuration.
+Searches are managed from Discord. The bot does not load a hard-coded default niche.
 
-Inside this file, you must define a `CONFIG` variable, which is an list of `Search` objects.
+Runtime files are stored in `data/` by default:
 
-Each `Search` object should be configured with the rules for the ads you want to track.
+| File | Description |
+| ---- | ----------- |
+| `data/settings.json` | Niches created with `/ajouter-niche` |
+| `data/stats.json` | Compteurs de recherches et d'alertes |
+| `data/id.json` | Already seen Leboncoin ad IDs |
+| `data/logs/` | Warning/error logs |
 
-For example, if you want to track ads for a **Porsche 944** priced between 0€ and 25,000€ anywhere in France:
-```python
-from model import Search, Parameters
+You can override these paths with environment variables:
 
-Search(
-    name="Porsche 944",
-    parameters=Parameters(
-        text="Porsche 944",
-        category=lbc.Category.VEHICULES_VOITURES,
-        price=[0, 25_000]
-    ),
-    delay=60 * 5, # Every 5 minutes
-    handler=handle,
-    proxy=None
-)
-```
-### Name
-A descriptive label for the Search.
+| Variable | Description |
+| -------- | ----------- |
+| `LBC_DATA_DIR` | Directory used for runtime files |
+| `LBC_SETTINGS_FILE` | Full path to the searches JSON file |
+| `LBC_STATS_FILE` | Full path to the stats JSON file |
 
-It has no impact on the actual query, it’s only used to identify the search.
+### Discord Commands
 
-### Parameters
+| Command | Description |
+| ------- | ----------- |
+| `/ajouter-niche` | Ajoute ou met à jour une niche avec mots-clés, prix, ville, rayon, état et type de vendeur |
+| `/supprimer-niche` | Supprime une niche |
+| `/vider-niches` | Supprime toutes les niches configurées |
+| `/diagnostic` | Affiche les chemins utilisés, les recherches actives et le salon Discord |
+| `/alerte-test` | Envoie une alerte de test dans le salon configuré |
+| `/pause` | Met une niche en pause sans la supprimer |
+| `/reprendre` | Relance une niche mise en pause |
+| `/niches` | Liste les niches configurées et leur statut |
+| `/statistiques` | Affiche les annonces trouvées, filtrées et alertées |
+| `/tester` | Teste une recherche sans la lancer |
+
+### Search Parameters
 
 All available parameters are documented in the [lbc](https://github.com/etienne-hd/lbc) repository.
 
 ### Delay
 
-The time interval between each search.
+Each active niche is checked every 60 seconds.
 
 ### Handler
 
