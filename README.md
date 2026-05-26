@@ -80,6 +80,7 @@ For a Proxmox LXC, keep one persistent data directory and point the bot to it:
 ```env
 DISCORD_TOKEN=your_discord_bot_token
 DISCORD_CHANNEL_ID=your_alert_channel_id
+DISCORD_COMMAND_CHANNEL_ID=your_command_channel_id
 LBC_DATA_DIR=/opt/lbc-finder/data
 ```
 
@@ -141,6 +142,13 @@ You can override these paths with environment variables:
 | `/niches` | Liste les niches configurées et leur statut |
 | `/statistiques` | Affiche les annonces trouvées, filtrées et alertées |
 | `/tester` | Teste une recherche sans la lancer, avec les mêmes filtres locaux que les alertes |
+
+`duree_heures` sur `/ajouter-niche` permet d'arrêter automatiquement une niche
+après un délai. Mets `0` pour ne jamais l'expirer.
+
+Si `DISCORD_COMMAND_CHANNEL_ID` est configuré, le bot supprime les messages
+classiques envoyés dans ce salon et laisse seulement les commandes slash. Il lui
+faut la permission Discord **Gérer les messages** dans ce salon.
 
 Le champ `marque` est optionnel mais recommandé. Pour une niche comme
 `mots_cles: poussette` et `marque: cybex`, le bot filtre localement les annonces
