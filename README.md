@@ -115,6 +115,10 @@ Runtime files are stored in `data/` by default:
 | `data/id.json` | Already seen Leboncoin ad IDs |
 | `data/logs/` | Warning/error logs |
 
+The bot only loads niches from `data/settings.json` by default. Old
+`settings.json` files next to the Python code are ignored to avoid stale demo
+searches being loaded after deployment.
+
 You can override these paths with environment variables:
 
 | Variable | Description |

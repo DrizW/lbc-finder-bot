@@ -18,8 +18,6 @@ APP_DIR = os.path.dirname(__file__)
 DATA_DIR = os.getenv("LBC_DATA_DIR", os.path.join(os.getcwd(), "data"))
 SETTINGS_FILE = os.getenv("LBC_SETTINGS_FILE", os.path.join(DATA_DIR, "settings.json"))
 STATS_FILE = os.getenv("LBC_STATS_FILE", os.path.join(DATA_DIR, "stats.json"))
-LEGACY_SETTINGS_FILE = os.path.join(APP_DIR, "settings.json")
-LEGACY_STATS_FILE = os.path.join(APP_DIR, "stats.json")
 
 # Reference to the Searcher instance — injected from main.py
 _searcher = None
@@ -31,10 +29,6 @@ def set_searcher(s):
 
 
 def get_settings_path() -> str:
-    if os.path.exists(SETTINGS_FILE):
-        return SETTINGS_FILE
-    if os.path.exists(LEGACY_SETTINGS_FILE):
-        return LEGACY_SETTINGS_FILE
     return SETTINGS_FILE
 
 
@@ -104,11 +98,10 @@ _stats_lock = threading.Lock()
 
 
 def load_stats() -> dict:
-    path = STATS_FILE if os.path.exists(STATS_FILE) else LEGACY_STATS_FILE
-    if not os.path.exists(path):
+    if not os.path.exists(STATS_FILE):
         return {}
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(STATS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return {}
