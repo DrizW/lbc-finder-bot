@@ -205,6 +205,21 @@ def _missing_keywords(ad: lbc.Ad, cfg: dict) -> list[str]:
     return [token for token in tokens if token not in searchable]
 
 
+def _missing_brand(ad: lbc.Ad, cfg: dict) -> str | None:
+    brand = normalize_text(cfg.get("marque", ""))
+    if not brand:
+        return None
+
+    searchable = _ad_match_text(ad)
+    brand_tokens = keyword_tokens(brand)
+    if not brand_tokens:
+        return None
+
+    if all(token in searchable for token in brand_tokens):
+        return None
+    return brand
+
+
 def get_filter_reason(ad: lbc.Ad, cfg: dict) -> str | None:
     max_price = cfg.get("max_price")
     min_price = cfg.get("min_price", 0)
@@ -213,6 +228,10 @@ def get_filter_reason(ad: lbc.Ad, cfg: dict) -> str | None:
 
     if max_price is not None and price is not None and price > max_price:
         return f"prix {price} € > max {max_price} €"
+
+    missing_brand = _missing_brand(ad, cfg)
+    if missing_brand:
+        return f"marque absente: {missing_brand}"
 
     if condition:
         ad_condition = _ad_condition(ad)
@@ -260,13 +279,13 @@ def geocode_city(city_name: str) -> tuple[float, float] | None:
 # ─────────────────────────────────────────────
 
 class AutobuyView(discord.ui.View):
-    def __init__(self, ad_id: str):
+    def __init__(self, ad_url: str):
         super().__init__(timeout=None)
         self.add_item(
             discord.ui.Button(
-                label="⚡ Acheter",
+                label="Voir l'annonce",
                 style=discord.ButtonStyle.link,
-                url=f"https://www.leboncoin.fr/paiement/achat_immediat/{ad_id}"
+                url=ad_url,
             )
         )
 
@@ -298,7 +317,8 @@ def _build_search(name: str, cfg: dict):
     from config.handler import handle
     from model import Search, Parameters
 
-    params_kwargs = {"text": cfg.get("keywords", name)}
+    query = f"{cfg.get('keywords', name)} {cfg.get('marque', '')}".strip()
+    params_kwargs = {"text": query}
     max_price = cfg.get("max_price")
 
     if isinstance(max_price, (int, float)) and max_price > 0:
@@ -346,7 +366,8 @@ CONDITION_CHOICES = [
 )
 @app_commands.describe(
     niche="Nom de la niche (ex: Poussette Cybex)",
-    mots_cles="Mots-clés de recherche (ex: poussette cybex)",
+    mots_cles="Objet recherché (ex: poussette, siege auto, robot tondeuse)",
+    marque="Marque obligatoire (ex: cybex, bugaboo, stokke)",
     prix_max="Prix maximum en euros",
     prix_min="Prix minimum en euros (alerte 🚨 si en dessous, potentielle pépite)",
     ville="Ville pour la recherche géolocalisée (laisser vide = France entière)",
@@ -360,6 +381,7 @@ async def ajouterniche(
     niche: str,
     mots_cles: str,
     prix_max: int,
+    marque: str = "",
     prix_min: int = 0,
     ville: str = "",
     rayon_km: int = 20,
@@ -370,6 +392,7 @@ async def ajouterniche(
     await interaction.response.defer(ephemeral=True)
     niche = normalize_text(niche)
     mots_cles = normalize_text(mots_cles)
+    marque = normalize_text(marque)
     ville = normalize_text(ville)
 
     if not niche:
@@ -423,6 +446,7 @@ async def ajouterniche(
 
     entry = {
         "keywords": mots_cles,
+        "marque": marque,
         "max_price": prix_max,
         "min_price": prix_min,
         "city": ville,
@@ -460,6 +484,7 @@ async def ajouterniche(
             if name != niche
             and isinstance(existing, dict)
             and normalize_text(existing.get("keywords", "")).lower() == mots_cles.lower()
+            and normalize_text(existing.get("marque", "")).lower() == marque.lower()
             and normalize_text(existing.get("city", "")).lower() == ville.lower()
             and existing.get("max_price") == prix_max
         ),
@@ -475,9 +500,10 @@ async def ajouterniche(
     settings[niche] = entry
     save_settings(settings)
     logger.info(
-        "[%s] Niche enregistrée: mots_cles=%r prix_max=%s seuil_pepite=%s ville=%r rayon=%s vendeur=%s etat=%s",
+        "[%s] Niche enregistrée: mots_cles=%r marque=%r prix_max=%s seuil_pepite=%s ville=%r rayon=%s vendeur=%s etat=%s",
         niche,
         mots_cles,
+        marque or "non définie",
         prix_max,
         prix_min,
         ville or "France entière",
@@ -495,6 +521,8 @@ async def ajouterniche(
     extras = []
     if particuliers_seulement:
         extras.append("👤 Particuliers uniquement")
+    if marque:
+        extras.append(f"🏷️ Marque obligatoire : `{marque}`")
     if prix_min > 0:
         extras.append(f"🚨 Alerte pépite sous `{prix_min} €`")
     if etat and etat.value != "all":
@@ -505,7 +533,8 @@ async def ajouterniche(
     await interaction.followup.send(
         f"✅ Niche **{niche}** ajoutée !\n"
         f"🔍 Mots-clés : `{mots_cles}`\n"
-        f"💶 Prix max : `{prix_max} €`\n"
+        + (f"🏷️ Marque : `{marque}`\n" if marque else "")
+        + f"💶 Prix max : `{prix_max} €`\n"
         f"📍 Localisation : {location_info}"
         + (("\n" + "\n".join(extras)) if extras else ""),
         ephemeral=True
@@ -613,6 +642,8 @@ async def niches(interaction: discord.Interaction):
         status = "⏸️ En pause" if cfg.get("paused") else "✅ Active"
         location = f"{cfg.get('city', '')} ({cfg.get('radius_km', 20)} km)" if cfg.get("city") else "France entière"
         extras = []
+        if cfg.get("marque"):
+            extras.append(f"🏷️ Marque : {cfg['marque']}")
         if cfg.get("owner_type") == "private":
             extras.append("👤 Particuliers uniquement")
         if cfg.get("min_price", 0) > 0:
@@ -623,6 +654,7 @@ async def niches(interaction: discord.Interaction):
             name=f"{status} — {name}",
             value=(
                 f"**Mots-clés :** `{cfg.get('keywords', '—')}`\n"
+                f"**Marque :** `{cfg.get('marque') or '—'}`\n"
                 f"**Prix :** `{cfg.get('min_price', 0)} € → {cfg.get('max_price', '∞')} €`\n"
                 f"**Zone :** {location}"
                 + (("\n" + " · ".join(extras)) if extras else "")
@@ -732,7 +764,8 @@ async def statistiques(interaction: discord.Interaction):
 
 @bot.tree.command(name="tester", description="Teste une recherche sans la lancer")
 @app_commands.describe(
-    mots_cles="Mots-clés à tester",
+    mots_cles="Objet recherché (ex: poussette, siege auto, robot tondeuse)",
+    marque="Marque obligatoire (ex: cybex, bugaboo, stokke)",
     ville="Ville (optionnel)",
     rayon_km="Rayon en km (défaut: 20)",
     prix_max="Prix maximum en euros (0 = aucun filtre)",
@@ -744,6 +777,7 @@ async def statistiques(interaction: discord.Interaction):
 async def tester(
     interaction: discord.Interaction,
     mots_cles: str,
+    marque: str = "",
     ville: str = "",
     rayon_km: int = 20,
     prix_max: int = 0,
@@ -754,6 +788,7 @@ async def tester(
 ):
     await interaction.response.defer(ephemeral=True)
     mots_cles = normalize_text(mots_cles)
+    marque = normalize_text(marque)
     ville = normalize_text(ville)
 
     if not mots_cles:
@@ -782,6 +817,7 @@ async def tester(
         "min_price": prix_min,
         "condition": etat.value if etat and etat.value != "all" else None,
         "keywords": mots_cles,
+        "marque": marque,
         "filtrage_strict": filtrage_strict,
         "mots_obligatoires": keyword_tokens(mots_cles),
     }
@@ -790,7 +826,7 @@ async def tester(
         try:
             from lbc import Client, Sort
             client = Client()
-            params = {"text": mots_cles}
+            params = {"text": f"{mots_cles} {marque}".strip()}
             if prix_max > 0:
                 params["price"] = [0, prix_max]
             if particuliers_seulement:
@@ -814,7 +850,7 @@ async def tester(
 
     location_info = f"autour de **{ville}** ({rayon_km} km)" if ville else "**France entière**"
     embed = discord.Embed(
-        title=f"🧪 Test — `{mots_cles}`",
+        title=f"🧪 Test — `{mots_cles}`" + (f" / `{marque}`" if marque else ""),
         description=f"📍 {location_info}\n📋 **{total} annonce(s)** trouvée(s) sur Leboncoin en ce moment.",
         color=discord.Color.orange()
     )
@@ -901,9 +937,13 @@ def send_alert_threadsafe(ad: lbc.Ad, search_name: str, is_bargain: bool = False
     if hasattr(ad, "images") and ad.images:
         embed.set_thumbnail(url=ad.images[0])
 
-    view = AutobuyView(str(ad.id))
+    ad_url = _ad_field(ad, "url", default=None)
+    view = AutobuyView(ad_url) if ad_url else None
 
-    future = asyncio.run_coroutine_threadsafe(channel.send(embed=embed, view=view), bot.loop)
+    future = asyncio.run_coroutine_threadsafe(
+        channel.send(embed=embed, view=view),
+        bot.loop,
+    )
 
     def _log_send_result(done):
         try:

@@ -138,10 +138,14 @@ You can override these paths with environment variables:
 | `/statistiques` | Affiche les annonces trouvées, filtrées et alertées |
 | `/tester` | Teste une recherche sans la lancer, avec les mêmes filtres locaux que les alertes |
 
-Le filtrage strict est activé par défaut. Pour une niche comme `poussette cybex`,
-le bot filtre localement les annonces qui ne contiennent pas les mots importants
-dans leur titre, description ou attributs, même si Leboncoin les renvoie dans les
-résultats.
+Le champ `marque` est optionnel mais recommandé. Pour une niche comme
+`mots_cles: poussette` et `marque: cybex`, le bot filtre localement les annonces
+qui ne contiennent pas `cybex` dans leur titre, description ou attributs, même si
+Leboncoin les renvoie dans les résultats.
+
+Le bouton des alertes ouvre l'annonce Leboncoin officielle. Il ne tente pas
+d'ouvrir directement une page de paiement, car les liens d'achat immédiat ne sont
+pas publics/stables et peuvent renvoyer une page 404.
 
 ### Search Parameters
 
