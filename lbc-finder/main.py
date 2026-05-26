@@ -1,14 +1,7 @@
 from model import Search, Parameters
 from searcher import Searcher
 from config.handler import handle
-from bot import (
-    get_settings_path,
-    load_settings,
-    parse_expires_at,
-    parse_sources,
-    set_searcher,
-    start_bot,
-)
+from bot import get_settings_path, load_settings, parse_sources, set_searcher, start_bot
 import lbc
 
 
@@ -25,14 +18,6 @@ def build_searches_from_settings() -> list[Search]:
         if cfg.get("paused", False):
             print(f"[Startup] ⏸️ Niche '{name}' en pause — ignorée au démarrage.")
             continue
-
-        expires_at = parse_expires_at(cfg.get("expires_at"))
-        if expires_at is not None:
-            import time
-
-            if time.time() >= expires_at:
-                print(f"[Startup] ⏳ Niche '{name}' expirée — ignorée au démarrage.")
-                continue
 
         query = f"{cfg.get('keywords', name)} {cfg.get('marque', '')}".strip()
         params_kwargs = {"text": query}
@@ -61,7 +46,6 @@ def build_searches_from_settings() -> list[Search]:
                 delay=60,
                 handler=handle,
                 sources=parse_sources(cfg.get("sources")),
-                expires_at=expires_at,
             )
         )
         print(f"[Startup] ✅ Niche chargée: {name}")

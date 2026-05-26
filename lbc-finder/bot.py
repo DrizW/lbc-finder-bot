@@ -20,7 +20,6 @@ APP_DIR = os.path.dirname(__file__)
 DATA_DIR = os.getenv("LBC_DATA_DIR", os.path.join(os.getcwd(), "data"))
 SETTINGS_FILE = os.getenv("LBC_SETTINGS_FILE", os.path.join(DATA_DIR, "settings.json"))
 STATS_FILE = os.getenv("LBC_STATS_FILE", os.path.join(DATA_DIR, "stats.json"))
-COMMAND_CHANNEL_ID = os.getenv("DISCORD_COMMAND_CHANNEL_ID")
 
 # Reference to the Searcher instance — injected from main.py
 _searcher = None
@@ -85,25 +84,6 @@ def parse_sources(value: str | list[str] | None) -> list[str]:
         if normalized and normalized not in sources:
             sources.append(normalized)
     return sources or ["leboncoin"]
-
-
-def parse_expires_at(value: object) -> float | None:
-    try:
-        expires_at = float(value)
-    except (TypeError, ValueError):
-        return None
-    return expires_at if expires_at > 0 else None
-
-
-def expiry_label(expires_at: float | None) -> str:
-    if expires_at is None:
-        return "jamais"
-    remaining = max(0, int(expires_at - datetime.datetime.now().timestamp()))
-    hours, rest = divmod(remaining, 3600)
-    minutes = rest // 60
-    if hours:
-        return f"dans {hours}h{minutes:02d}"
-    return f"dans {minutes} min"
 
 
 # ─────────────────────────────────────────────
@@ -335,38 +315,6 @@ class LbcBot(commands.Bot):
         daily_summary.start()
         print("[Bot] Résumé quotidien programmé à 9h00.")
 
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or not COMMAND_CHANNEL_ID:
-            return
-
-        try:
-            command_channel_id = int(COMMAND_CHANNEL_ID)
-        except ValueError:
-            logger.warning("DISCORD_COMMAND_CHANNEL_ID invalide: %s", COMMAND_CHANNEL_ID)
-            return
-
-        if message.channel.id != command_channel_id:
-            return
-
-        try:
-            await message.delete()
-        except discord.Forbidden:
-            logger.warning(
-                "Impossible de supprimer un message dans le salon commandes: permission manquante."
-            )
-            return
-        except discord.HTTPException:
-            logger.exception("Impossible de supprimer un message dans le salon commandes.")
-            return
-
-        try:
-            warning = await message.channel.send(
-                f"{message.author.mention} ce salon est réservé aux commandes slash."
-            )
-            await warning.delete(delay=8)
-        except discord.HTTPException:
-            logger.exception("Impossible d'envoyer le rappel du salon commandes.")
-
 
 bot = LbcBot()
 
@@ -405,7 +353,6 @@ def _build_search(name: str, cfg: dict):
         delay=60,
         handler=handle,
         sources=parse_sources(cfg.get("sources")),
-        expires_at=parse_expires_at(cfg.get("expires_at")),
     )
 
 
@@ -439,7 +386,6 @@ CONDITION_CHOICES = [
     particuliers_seulement="Ne montrer que les annonces de particuliers",
     filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
     sources="Sources à surveiller séparées par virgule: leboncoin, ebay",
-    duree_heures="Durée de vie de la niche en heures (0 = jamais)",
 )
 @app_commands.choices(etat=CONDITION_CHOICES)
 async def ajouterniche(
@@ -454,7 +400,6 @@ async def ajouterniche(
     particuliers_seulement: bool = False,
     filtrage_strict: bool = True,
     sources: str = "leboncoin",
-    duree_heures: int = 0,
     etat: app_commands.Choice[str] = None,
 ):
     await interaction.response.defer(ephemeral=True)
@@ -513,19 +458,6 @@ async def ajouterniche(
         )
         return
 
-    if duree_heures < 0:
-        await interaction.followup.send(
-            "❌ La durée de vie ne peut pas être négative.",
-            ephemeral=True
-        )
-        return
-
-    expires_at = (
-        datetime.datetime.now().timestamp() + duree_heures * 3600
-        if duree_heures > 0
-        else None
-    )
-
     entry = {
         "keywords": mots_cles,
         "marque": marque,
@@ -540,7 +472,6 @@ async def ajouterniche(
         "filtrage_strict": filtrage_strict,
         "mots_obligatoires": keyword_tokens(mots_cles),
         "sources": source_names,
-        "expires_at": expires_at,
         "paused": False,
     }
 
@@ -616,15 +547,12 @@ async def ajouterniche(
     if filtrage_strict:
         extras.append("🎯 Filtrage strict activé")
     extras.append(f"🌐 Sources : `{', '.join(source_names)}`")
-    if expires_at:
-        extras.append(f"⏳ Expire {expiry_label(expires_at)}")
 
     await interaction.followup.send(
         f"✅ Niche **{niche}** ajoutée !\n"
         f"🔍 Mots-clés : `{mots_cles}`\n"
         + (f"🏷️ Marque : `{marque}`\n" if marque else "")
         + f"🌐 Sources : `{', '.join(source_names)}`\n"
-        + f"⏳ Expiration : `{expiry_label(expires_at)}`\n"
         + f"💶 Prix max : `{prix_max} €`\n"
         f"📍 Localisation : {location_info}"
         + (("\n" + "\n".join(extras)) if extras else ""),
@@ -747,9 +675,6 @@ async def niches(interaction: discord.Interaction):
             extras.append(f"🚨 Pépite < {cfg['min_price']} €")
         if cfg.get("filtrage_strict", True):
             extras.append("🎯 Filtrage strict")
-        expires_at = parse_expires_at(cfg.get("expires_at"))
-        if expires_at:
-            extras.append(f"⏳ Expire {expiry_label(expires_at)}")
         embed.add_field(
             name=f"{status} — {name}",
             value=(
@@ -757,7 +682,6 @@ async def niches(interaction: discord.Interaction):
                 f"**Marque :** `{cfg.get('marque') or '—'}`\n"
                 f"**Sources :** `{', '.join(parse_sources(cfg.get('sources')))}`\n"
                 f"**Prix :** `{cfg.get('min_price', 0)} € → {cfg.get('max_price', '∞')} €`\n"
-                f"**Expiration :** `{expiry_label(expires_at)}`\n"
                 f"**Zone :** {location}"
                 + (("\n" + " · ".join(extras)) if extras else "")
             ),
@@ -781,11 +705,6 @@ async def diagnostic(interaction: discord.Interaction):
     embed.add_field(name="Configuration", value=f"`{get_settings_path()}`", inline=False)
     embed.add_field(name="Statistiques", value=f"`{STATS_FILE}`", inline=False)
     embed.add_field(name="Données", value=f"`{DATA_DIR}`", inline=False)
-    embed.add_field(
-        name="Salon commandes",
-        value=f"`{COMMAND_CHANNEL_ID}`" if COMMAND_CHANNEL_ID else "`non configuré`",
-        inline=False,
-    )
     embed.add_field(name="Niches configurées", value=f"`{len(settings)}`", inline=True)
     embed.add_field(name="Recherches lancées", value=f"`{len(active_searches)}`", inline=True)
     embed.add_field(

@@ -12,4 +12,3 @@ class Search:
     handler: Callable[[Ad, str], None]
     proxy: Proxy | None = None
     sources: list[str] | None = None
-    expires_at: float | None = None

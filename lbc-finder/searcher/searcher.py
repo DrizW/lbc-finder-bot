@@ -50,11 +50,6 @@ class Searcher:
 
     def _search(self, search: Search, stop_event: threading.Event) -> None:
         while not stop_event.is_set():
-            if search.expires_at is not None and time.time() >= search.expires_at:
-                logger.info("[%s] Niche expirée, arrêt automatique.", search.name)
-                self.remove_search_thread(search.name)
-                break
-
             before = time.time()
             try:
                 ads = []
