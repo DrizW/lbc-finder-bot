@@ -585,20 +585,25 @@ async def supprimerniche(interaction: discord.Interaction, niche: str):
 @bot.tree.command(name="vider-niches", description="Supprime toutes les niches configurées")
 async def viderlesniches(interaction: discord.Interaction):
     settings = load_settings()
-    if not settings:
-        await interaction.response.send_message(
-            "📭 Aucune niche configurée.", ephemeral=True
-        )
-        return
+    stopped_threads = []
 
-    for niche in list(settings.keys()):
-        if _searcher is not None:
-            _searcher.remove_search_thread(niche)
+    if _searcher is not None:
+        stopped_threads = _searcher.remove_all_search_threads()
 
     save_settings({})
-    logger.info("Toutes les niches ont été supprimées.")
+    logger.info(
+        "Toutes les niches ont été supprimées. Threads stoppés: %s",
+        ", ".join(stopped_threads) if stopped_threads else "aucun",
+    )
+    details = (
+        f"\nThreads arrêtés : `{', '.join(stopped_threads)}`"
+        if stopped_threads
+        else ""
+    )
     await interaction.response.send_message(
-        "🧹 Toutes les niches ont été supprimées. Vous pouvez repartir avec `/ajouter-niche`.",
+        "🧹 Toutes les niches ont été supprimées. "
+        "Vous pouvez repartir avec `/ajouter-niche`."
+        + details,
         ephemeral=True
     )
 

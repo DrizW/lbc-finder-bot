@@ -138,6 +138,18 @@ class Searcher:
                 return True
         return False
 
+    def remove_all_search_threads(self) -> list[str]:
+        """Stops every active search thread, including stale runtime-only searches."""
+        with self._lock:
+            names = sorted(set(self._stop_events) | set(self._threads))
+            for event in self._stop_events.values():
+                event.set()
+            self._stop_events.clear()
+            self._threads.clear()
+            if names:
+                logger.info("Threads de recherche arrêtés: %s", ", ".join(names))
+            return names
+
     def active_searches(self) -> list[str]:
         with self._lock:
             return list(self._threads.keys())
