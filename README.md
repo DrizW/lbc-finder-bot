@@ -151,6 +151,26 @@ Le bouton des alertes ouvre l'annonce Leboncoin officielle. Il ne tente pas
 d'ouvrir directement une page de paiement, car les liens d'achat immédiat ne sont
 pas publics/stables et peuvent renvoyer une page 404.
 
+### Sources
+
+`leboncoin` est activé par défaut. Pour ajouter eBay, crée une application dans
+le portail développeur eBay, puis ajoute ces variables à ton `.env` :
+
+```env
+EBAY_CLIENT_ID=...
+EBAY_CLIENT_SECRET=...
+EBAY_MARKETPLACE_ID=EBAY_FR
+```
+
+Ensuite, dans Discord :
+
+```text
+/ajouter-niche sources:leboncoin,ebay
+```
+
+Si les identifiants eBay sont absents, la source eBay est ignorée et un warning
+est écrit dans les logs.
+
 ### Search Parameters
 
 All available parameters are documented in the [lbc](https://github.com/etienne-hd/lbc) repository.

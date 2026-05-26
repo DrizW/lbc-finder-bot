@@ -10,6 +10,8 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 from searcher.logger import logger
+from model import Search, Parameters
+from sources import get_source
 import lbc
 
 load_dotenv()
@@ -67,6 +69,21 @@ def normalize_for_match(value: object) -> str:
 def keyword_tokens(value: str) -> list[str]:
     tokens = re.findall(r"[a-z0-9]+", normalize_for_match(value))
     return [token for token in tokens if len(token) > 1 and token not in STOPWORDS]
+
+
+def parse_sources(value: str | list[str] | None) -> list[str]:
+    if isinstance(value, list):
+        raw_sources = value
+    else:
+        raw_sources = str(value or "leboncoin").split(",")
+    sources = []
+    for source in raw_sources:
+        normalized = normalize_for_match(source).strip()
+        if normalized in {"lbc", "leboncoin"}:
+            normalized = "leboncoin"
+        if normalized and normalized not in sources:
+            sources.append(normalized)
+    return sources or ["leboncoin"]
 
 
 # ─────────────────────────────────────────────
@@ -335,6 +352,7 @@ def _build_search(name: str, cfg: dict):
         parameters=Parameters(**params_kwargs),
         delay=60,
         handler=handle,
+        sources=parse_sources(cfg.get("sources")),
     )
 
 
@@ -367,6 +385,7 @@ CONDITION_CHOICES = [
     rayon_km="Rayon en km autour de la ville (défaut: 20)",
     particuliers_seulement="Ne montrer que les annonces de particuliers",
     filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
+    sources="Sources à surveiller séparées par virgule: leboncoin, ebay",
 )
 @app_commands.choices(etat=CONDITION_CHOICES)
 async def ajouterniche(
@@ -380,6 +399,7 @@ async def ajouterniche(
     rayon_km: int = 20,
     particuliers_seulement: bool = False,
     filtrage_strict: bool = True,
+    sources: str = "leboncoin",
     etat: app_commands.Choice[str] = None,
 ):
     await interaction.response.defer(ephemeral=True)
@@ -387,6 +407,7 @@ async def ajouterniche(
     mots_cles = normalize_text(mots_cles)
     marque = normalize_text(marque)
     ville = normalize_text(ville)
+    source_names = parse_sources(sources)
 
     if not niche:
         await interaction.followup.send(
@@ -450,6 +471,7 @@ async def ajouterniche(
         "condition": etat.value if etat and etat.value != "all" else None,
         "filtrage_strict": filtrage_strict,
         "mots_obligatoires": keyword_tokens(mots_cles),
+        "sources": source_names,
         "paused": False,
     }
 
@@ -480,6 +502,7 @@ async def ajouterniche(
             and normalize_text(existing.get("marque", "")).lower() == marque.lower()
             and normalize_text(existing.get("city", "")).lower() == ville.lower()
             and existing.get("max_price") == prix_max
+            and parse_sources(existing.get("sources")) == source_names
         ),
         None,
     )
@@ -493,7 +516,7 @@ async def ajouterniche(
     settings[niche] = entry
     save_settings(settings)
     logger.info(
-        "[%s] Niche enregistrée: mots_cles=%r marque=%r prix_max=%s seuil_pepite=%s ville=%r rayon=%s vendeur=%s etat=%s",
+        "[%s] Niche enregistrée: mots_cles=%r marque=%r prix_max=%s seuil_pepite=%s ville=%r rayon=%s vendeur=%s etat=%s sources=%s",
         niche,
         mots_cles,
         marque or "non définie",
@@ -503,6 +526,7 @@ async def ajouterniche(
         rayon_km,
         entry["owner_type"],
         entry["condition"] or "all",
+        ",".join(source_names),
     )
 
     # Inject live into the Searcher
@@ -522,11 +546,13 @@ async def ajouterniche(
         extras.append(f"🏷️ État : `{etat.name}`")
     if filtrage_strict:
         extras.append("🎯 Filtrage strict activé")
+    extras.append(f"🌐 Sources : `{', '.join(source_names)}`")
 
     await interaction.followup.send(
         f"✅ Niche **{niche}** ajoutée !\n"
         f"🔍 Mots-clés : `{mots_cles}`\n"
         + (f"🏷️ Marque : `{marque}`\n" if marque else "")
+        + f"🌐 Sources : `{', '.join(source_names)}`\n"
         + f"💶 Prix max : `{prix_max} €`\n"
         f"📍 Localisation : {location_info}"
         + (("\n" + "\n".join(extras)) if extras else ""),
@@ -637,6 +663,7 @@ async def niches(interaction: discord.Interaction):
         extras = []
         if cfg.get("marque"):
             extras.append(f"🏷️ Marque : {cfg['marque']}")
+        extras.append(f"🌐 Sources : {', '.join(parse_sources(cfg.get('sources')))}")
         if cfg.get("owner_type") == "private":
             extras.append("👤 Particuliers uniquement")
         if cfg.get("min_price", 0) > 0:
@@ -648,6 +675,7 @@ async def niches(interaction: discord.Interaction):
             value=(
                 f"**Mots-clés :** `{cfg.get('keywords', '—')}`\n"
                 f"**Marque :** `{cfg.get('marque') or '—'}`\n"
+                f"**Sources :** `{', '.join(parse_sources(cfg.get('sources')))}`\n"
                 f"**Prix :** `{cfg.get('min_price', 0)} € → {cfg.get('max_price', '∞')} €`\n"
                 f"**Zone :** {location}"
                 + (("\n" + " · ".join(extras)) if extras else "")
@@ -765,6 +793,7 @@ async def statistiques(interaction: discord.Interaction):
     prix_min="Seuil pépite en euros (0 = désactivé)",
     particuliers_seulement="Ne montrer que les annonces de particuliers",
     filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
+    sources="Sources à tester séparées par virgule: leboncoin, ebay",
 )
 @app_commands.choices(etat=CONDITION_CHOICES)
 async def tester(
@@ -777,12 +806,14 @@ async def tester(
     prix_min: int = 0,
     particuliers_seulement: bool = False,
     filtrage_strict: bool = True,
+    sources: str = "leboncoin",
     etat: app_commands.Choice[str] = None,
 ):
     await interaction.response.defer(ephemeral=True)
     mots_cles = normalize_text(mots_cles)
     marque = normalize_text(marque)
     ville = normalize_text(ville)
+    source_names = parse_sources(sources)
 
     if not mots_cles:
         await interaction.followup.send(
@@ -813,12 +844,11 @@ async def tester(
         "marque": marque,
         "filtrage_strict": filtrage_strict,
         "mots_obligatoires": keyword_tokens(mots_cles),
+        "sources": source_names,
     }
 
     def run_simulate():
         try:
-            from lbc import Client, Sort
-            client = Client()
             params = {"text": f"{mots_cles} {marque}".strip()}
             if prix_max > 0:
                 params["price"] = [0, prix_max]
@@ -830,8 +860,20 @@ async def tester(
                     params["locations"] = [
                         lbc.City(lat=coords[0], lng=coords[1], radius=rayon_km * 1000, city=ville)
                     ]
-            response = client.search(**params, sort=Sort.NEWEST)
-            return response.total, response.ads[:3]
+            simulated_search = Search(
+                name="simulation",
+                parameters=Parameters(**params),
+                delay=60,
+                handler=lambda _ad, _name: None,
+                sources=source_names,
+            )
+            ads = []
+            for source_name in source_names:
+                source = get_source(source_name)
+                if source is None:
+                    continue
+                ads.extend(source.search(simulated_search))
+            return len(ads), ads[:3]
         except Exception as e:
             return None, str(e)
 
@@ -844,7 +886,11 @@ async def tester(
     location_info = f"autour de **{ville}** ({rayon_km} km)" if ville else "**France entière**"
     embed = discord.Embed(
         title=f"🧪 Test — `{mots_cles}`" + (f" / `{marque}`" if marque else ""),
-        description=f"📍 {location_info}\n📋 **{total} annonce(s)** trouvée(s) sur Leboncoin en ce moment.",
+        description=(
+            f"📍 {location_info}\n"
+            f"🌐 Sources : **{', '.join(source_names)}**\n"
+            f"📋 **{total} annonce(s)** trouvée(s)."
+        ),
         color=discord.Color.orange()
     )
     for ad in result:
@@ -926,6 +972,8 @@ def send_alert_threadsafe(ad: lbc.Ad, search_name: str, is_bargain: bool = False
     )
     embed.add_field(name="💶 Prix", value=f"{ad.price} €", inline=True)
     embed.add_field(name="📦 Niche", value=search_name, inline=True)
+    source_name = _ad_field(ad, "source", default="leboncoin")
+    embed.add_field(name="🌐 Source", value=str(source_name), inline=True)
 
     if hasattr(ad, "images") and ad.images:
         embed.set_thumbnail(url=ad.images[0])

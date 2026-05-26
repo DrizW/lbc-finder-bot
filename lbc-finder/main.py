@@ -1,7 +1,7 @@
 from model import Search, Parameters
 from searcher import Searcher
 from config.handler import handle
-from bot import get_settings_path, load_settings, set_searcher, start_bot
+from bot import get_settings_path, load_settings, parse_sources, set_searcher, start_bot
 import lbc
 
 
@@ -19,7 +19,8 @@ def build_searches_from_settings() -> list[Search]:
             print(f"[Startup] ⏸️ Niche '{name}' en pause — ignorée au démarrage.")
             continue
 
-        params_kwargs = {"text": cfg.get("keywords", name)}
+        query = f"{cfg.get('keywords', name)} {cfg.get('marque', '')}".strip()
+        params_kwargs = {"text": query}
 
         if cfg.get("lat") and cfg.get("lng"):
             params_kwargs["locations"] = [
@@ -44,6 +45,7 @@ def build_searches_from_settings() -> list[Search]:
                 parameters=Parameters(**params_kwargs),
                 delay=60,
                 handler=handle,
+                sources=parse_sources(cfg.get("sources")),
             )
         )
         print(f"[Startup] ✅ Niche chargée: {name}")

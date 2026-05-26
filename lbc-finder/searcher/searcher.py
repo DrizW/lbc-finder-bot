@@ -1,7 +1,7 @@
 from model import Search
-from lbc import Client, Sort
 from .id import ID
 from .logger import logger
+from sources import get_source
 
 import time
 import threading
@@ -49,19 +49,36 @@ class Searcher:
         return False
 
     def _search(self, search: Search, stop_event: threading.Event) -> None:
-        client = Client(proxy=search.proxy, request_verify=self._request_verify)
         while not stop_event.is_set():
             before = time.time()
             try:
-                response = client.search(**search.parameters._kwargs, sort=Sort.NEWEST)
-                logger.debug(
-                    f"[{search.name}] {response.total} annonce(s) trouvée(s)."
-                )
-                ads = [
-                    ad
-                    for ad in response.ads
-                    if not self._id.contains(search.name, ad.id)
-                ]
+                ads = []
+                source_names = search.sources or ["leboncoin"]
+                for source_name in source_names:
+                    source = get_source(
+                        source_name,
+                        request_verify=self._request_verify,
+                    )
+                    if source is None:
+                        logger.warning(
+                            "[%s] Source inconnue ignorée: %s",
+                            search.name,
+                            source_name,
+                        )
+                        continue
+                    source_ads = source.search(search)
+                    logger.debug(
+                        "[%s] %s: %s annonce(s) trouvée(s).",
+                        search.name,
+                        source.name,
+                        len(source_ads),
+                    )
+                    ads.extend(
+                        ad
+                        for ad in source_ads
+                        if not self._id.contains(search.name, ad.id)
+                    )
+
                 if ads:
                     logger.info(
                         f"[{search.name}] {len(ads)} nouvelle(s) annonce(s) !"

@@ -11,3 +11,4 @@ class Search:
     delay: float
     handler: Callable[[Ad, str], None]
     proxy: Proxy | None = None
+    sources: list[str] | None = None
