@@ -129,7 +129,7 @@ class Searcher:
         if not self._searches:
             logger.warning(
                 "Aucune niche configurée au démarrage. "
-                "Utilisez /addsearch dans Discord pour en ajouter."
+                "Utilisez /ajouter-niche dans Discord pour en ajouter."
             )
             return True  # Not an error — Discord commands will add them
 

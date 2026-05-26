@@ -127,7 +127,7 @@ You can override these paths with environment variables:
 
 | Command | Description |
 | ------- | ----------- |
-| `/ajouter-niche` | Ajoute ou met à jour une niche avec mots-clés, prix, ville, rayon, état et type de vendeur |
+| `/ajouter-niche` | Ajoute ou met à jour une niche avec mots-clés, prix, ville, rayon, état, type de vendeur et filtrage strict |
 | `/supprimer-niche` | Supprime une niche |
 | `/vider-niches` | Supprime toutes les niches configurées |
 | `/diagnostic` | Affiche les chemins utilisés, les recherches actives et le salon Discord |
@@ -136,7 +136,12 @@ You can override these paths with environment variables:
 | `/reprendre` | Relance une niche mise en pause |
 | `/niches` | Liste les niches configurées et leur statut |
 | `/statistiques` | Affiche les annonces trouvées, filtrées et alertées |
-| `/tester` | Teste une recherche sans la lancer |
+| `/tester` | Teste une recherche sans la lancer, avec les mêmes filtres locaux que les alertes |
+
+Le filtrage strict est activé par défaut. Pour une niche comme `poussette cybex`,
+le bot filtre localement les annonces qui ne contiennent pas les mots importants
+dans leur titre, description ou attributs, même si Leboncoin les renvoie dans les
+résultats.
 
 ### Search Parameters
 

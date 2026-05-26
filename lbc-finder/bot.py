@@ -3,6 +3,8 @@ import json
 import asyncio
 import datetime
 import threading
+import re
+import unicodedata
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -38,6 +40,39 @@ def get_settings_path() -> str:
 
 def normalize_text(value: str) -> str:
     return " ".join(value.strip().split())
+
+
+STOPWORDS = {
+    "a",
+    "au",
+    "aux",
+    "avec",
+    "de",
+    "des",
+    "du",
+    "en",
+    "et",
+    "la",
+    "le",
+    "les",
+    "l",
+    "pour",
+    "sur",
+    "un",
+    "une",
+}
+
+
+def normalize_for_match(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode(
+        "ascii", "ignore"
+    ).decode("ascii")
+    return text.lower()
+
+
+def keyword_tokens(value: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", normalize_for_match(value))
+    return [token for token in tokens if len(token) > 1 and token not in STOPWORDS]
 
 
 # ─────────────────────────────────────────────
@@ -139,6 +174,37 @@ def _ad_condition(ad: lbc.Ad) -> str | None:
     return None
 
 
+def _ad_match_text(ad: lbc.Ad) -> str:
+    parts = [
+        _ad_field(ad, "subject", "title", default=""),
+        _ad_field(ad, "body", "description", default=""),
+    ]
+    for source_name in ("attributes", "options"):
+        source = getattr(ad, source_name, None)
+        if isinstance(source, dict):
+            parts.extend(str(value) for value in source.values() if value is not None)
+        elif isinstance(source, list):
+            for item in source:
+                if isinstance(item, dict):
+                    parts.extend(str(value) for value in item.values() if value is not None)
+    return normalize_for_match(" ".join(parts))
+
+
+def _missing_keywords(ad: lbc.Ad, cfg: dict) -> list[str]:
+    if cfg.get("filtrage_strict") is False:
+        return []
+
+    tokens = cfg.get("mots_obligatoires")
+    if not isinstance(tokens, list):
+        tokens = keyword_tokens(cfg.get("keywords", ""))
+
+    if not tokens:
+        return []
+
+    searchable = _ad_match_text(ad)
+    return [token for token in tokens if token not in searchable]
+
+
 def get_filter_reason(ad: lbc.Ad, cfg: dict) -> str | None:
     max_price = cfg.get("max_price")
     min_price = cfg.get("min_price", 0)
@@ -152,6 +218,10 @@ def get_filter_reason(ad: lbc.Ad, cfg: dict) -> str | None:
         ad_condition = _ad_condition(ad)
         if ad_condition and ad_condition != str(condition):
             return f"etat {ad_condition} != {condition}"
+
+    missing = _missing_keywords(ad, cfg)
+    if missing:
+        return f"mot(s)-clé(s) absent(s): {', '.join(missing)}"
 
     return None
 
@@ -282,6 +352,7 @@ CONDITION_CHOICES = [
     ville="Ville pour la recherche géolocalisée (laisser vide = France entière)",
     rayon_km="Rayon en km autour de la ville (défaut: 20)",
     particuliers_seulement="Ne montrer que les annonces de particuliers",
+    filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
 )
 @app_commands.choices(etat=CONDITION_CHOICES)
 async def ajouterniche(
@@ -293,6 +364,7 @@ async def ajouterniche(
     ville: str = "",
     rayon_km: int = 20,
     particuliers_seulement: bool = False,
+    filtrage_strict: bool = True,
     etat: app_commands.Choice[str] = None,
 ):
     await interaction.response.defer(ephemeral=True)
@@ -359,6 +431,8 @@ async def ajouterniche(
         "radius_km": rayon_km,
         "owner_type": "private" if particuliers_seulement else "all",
         "condition": etat.value if etat and etat.value != "all" else None,
+        "filtrage_strict": filtrage_strict,
+        "mots_obligatoires": keyword_tokens(mots_cles),
         "paused": False,
     }
 
@@ -425,6 +499,8 @@ async def ajouterniche(
         extras.append(f"🚨 Alerte pépite sous `{prix_min} €`")
     if etat and etat.value != "all":
         extras.append(f"🏷️ État : `{etat.name}`")
+    if filtrage_strict:
+        extras.append("🎯 Filtrage strict activé")
 
     await interaction.followup.send(
         f"✅ Niche **{niche}** ajoutée !\n"
@@ -541,6 +617,8 @@ async def niches(interaction: discord.Interaction):
             extras.append("👤 Particuliers uniquement")
         if cfg.get("min_price", 0) > 0:
             extras.append(f"🚨 Pépite < {cfg['min_price']} €")
+        if cfg.get("filtrage_strict", True):
+            extras.append("🎯 Filtrage strict")
         embed.add_field(
             name=f"{status} — {name}",
             value=(
@@ -660,6 +738,7 @@ async def statistiques(interaction: discord.Interaction):
     prix_max="Prix maximum en euros (0 = aucun filtre)",
     prix_min="Seuil pépite en euros (0 = désactivé)",
     particuliers_seulement="Ne montrer que les annonces de particuliers",
+    filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
 )
 @app_commands.choices(etat=CONDITION_CHOICES)
 async def tester(
@@ -670,6 +749,7 @@ async def tester(
     prix_max: int = 0,
     prix_min: int = 0,
     particuliers_seulement: bool = False,
+    filtrage_strict: bool = True,
     etat: app_commands.Choice[str] = None,
 ):
     await interaction.response.defer(ephemeral=True)
@@ -701,6 +781,9 @@ async def tester(
         "max_price": prix_max or None,
         "min_price": prix_min,
         "condition": etat.value if etat and etat.value != "all" else None,
+        "keywords": mots_cles,
+        "filtrage_strict": filtrage_strict,
+        "mots_obligatoires": keyword_tokens(mots_cles),
     }
 
     def run_simulate():
