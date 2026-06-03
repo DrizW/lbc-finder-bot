@@ -672,7 +672,15 @@ async def ajouterniche(
     )
 
 
-@bot.tree.command(name="supprimer-niche", description="Supprime une niche de recherche")
+@bot.tree.command(name="supprimer-une-niche", description="Supprime une seule niche configurée")
+@app_commands.describe(niche="Nom de la niche à supprimer")
+@app_commands.autocomplete(niche=configured_niche_autocomplete)
+async def supprimeruneniche(interaction: discord.Interaction, niche: str):
+    _, message = delete_configured_niche(niche)
+    await interaction.response.send_message(message, ephemeral=True)
+
+
+@bot.tree.command(name="supprimer-niche", description="Alias: supprime une seule niche")
 @app_commands.describe(niche="Nom de la niche à supprimer")
 @app_commands.autocomplete(niche=configured_niche_autocomplete)
 async def supprimerniche(interaction: discord.Interaction, niche: str):
@@ -680,7 +688,7 @@ async def supprimerniche(interaction: discord.Interaction, niche: str):
     await interaction.response.send_message(message, ephemeral=True)
 
 
-@bot.tree.command(name="retirer-niche", description="Retire une seule niche configurée")
+@bot.tree.command(name="retirer-niche", description="Alias: retire une seule niche")
 @app_commands.describe(niche="Nom de la niche à retirer")
 @app_commands.autocomplete(niche=configured_niche_autocomplete)
 async def retirerniche(interaction: discord.Interaction, niche: str):
