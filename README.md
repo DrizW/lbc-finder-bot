@@ -171,6 +171,20 @@ Ensuite, dans Discord :
 Si les identifiants eBay sont absents, la source eBay est ignorée et un warning
 est écrit dans les logs.
 
+### Opportunity Engine MVP
+
+Le bot stocke maintenant les annonces détectées dans SQLite (`data/listings.sqlite3`)
+et applique une analyse par règles pour la niche `Poussettes premium` :
+
+- identification marque/modèle/accessoires
+- estimation d'état et risques à vérifier
+- comparaison aux annonces comparables déjà stockées
+- estimation de marge
+- score de chaleur de 0 à 100
+
+Les alertes Discord enrichies sont envoyées uniquement quand le score atteint le
+seuil de la niche (`min_heat_score`, 75 par défaut).
+
 ### Search Parameters
 
 All available parameters are documented in the [lbc](https://github.com/etienne-hd/lbc) repository.

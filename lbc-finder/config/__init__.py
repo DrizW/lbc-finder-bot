@@ -1,10 +1,13 @@
 # Config is now fully dynamic — searches are managed via Discord commands:
-#   /addsearch  — ajouter une niche
-#   /delsearch  — supprimer une niche
-#   /listsearches — lister les niches actives
+#   /ajouter-niche  — ajouter une niche
+#   /supprimer-niche  — supprimer une niche
+#   /niches — lister les niches actives
 #
 # This file is kept for import compatibility only.
 
-from .handler import handle  # noqa: F401
+try:
+    from .handler import handle  # noqa: F401
+except ModuleNotFoundError:
+    handle = None
 
 CONFIG = []  # Empty — loaded dynamically from settings.json at startup

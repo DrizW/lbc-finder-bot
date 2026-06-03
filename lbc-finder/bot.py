@@ -1007,6 +1007,112 @@ def send_alert_threadsafe(ad: lbc.Ad, search_name: str, is_bargain: bool = False
     future.add_done_callback(_log_send_result)
 
 
+def send_opportunity_alert_threadsafe(opportunity, search_name: str):
+    channel, channel_error = get_alert_channel()
+    if not channel:
+        logger.error("[Bot] %s", channel_error)
+        return
+
+    raw = opportunity.raw
+    analysis = opportunity.analysis
+    market = opportunity.market
+    margin = opportunity.margin
+    title = (
+        f"🔥🔥 {opportunity.heat_score}/100 — {opportunity.heat_label}"
+        if opportunity.heat_score >= 85
+        else f"🔥 {opportunity.heat_score}/100 — {opportunity.heat_label}"
+    )
+    product = " ".join(
+        part
+        for part in [analysis.detected_brand, analysis.detected_model]
+        if part
+    ) or raw.title
+
+    embed = discord.Embed(
+        title=title,
+        url=raw.url,
+        color=discord.Color.red() if opportunity.heat_score >= 85 else discord.Color.gold(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.add_field(name="Produit détecté", value=product, inline=False)
+    embed.add_field(name="Prix annonce", value=f"{raw.price} €", inline=True)
+    embed.add_field(
+        name="Prix médian observé",
+        value=f"{market.median} €" if market.median else "insuffisant",
+        inline=True,
+    )
+    embed.add_field(
+        name="Comparables",
+        value=str(market.comparable_count),
+        inline=True,
+    )
+    embed.add_field(
+        name="Revente réaliste",
+        value=(
+            f"{margin.resale_price_low} à {margin.resale_price_high} €"
+            if margin.resale_price_low and margin.resale_price_high
+            else "à confirmer"
+        ),
+        inline=True,
+    )
+    embed.add_field(
+        name="Marge estimée",
+        value=(
+            f"{margin.estimated_margin_low} à {margin.estimated_margin_high} €"
+            if margin.estimated_margin_low is not None
+            and margin.estimated_margin_high is not None
+            else "à confirmer"
+        ),
+        inline=True,
+    )
+    embed.add_field(
+        name="État",
+        value=analysis.detected_condition or "non détecté",
+        inline=True,
+    )
+    embed.add_field(
+        name="Accessoires",
+        value=", ".join(analysis.detected_accessories) or "non détectés",
+        inline=False,
+    )
+    embed.add_field(name="Localisation", value=raw.location or "non précisée", inline=True)
+    embed.add_field(name="Source", value=raw.platform, inline=True)
+    embed.add_field(
+        name="Pourquoi c'est intéressant",
+        value="\n".join(f"- {reason}" for reason in opportunity.reasons) or "- Score suffisant",
+        inline=False,
+    )
+    checks = analysis.risk_flags or [
+        "vérifier freins",
+        "vérifier roues",
+        "vérifier pliage",
+        "vérifier textile",
+    ]
+    embed.add_field(
+        name="Points à vérifier",
+        value="\n".join(f"- {risk}" for risk in checks),
+        inline=False,
+    )
+    embed.add_field(
+        name="Message vendeur suggéré",
+        value=(
+            "Bonjour, votre poussette est-elle toujours disponible ?\n"
+            "Est-ce qu’elle se plie correctement et est-ce que les roues/freins "
+            "sont en bon état ? Je peux me déplacer rapidement si tout est OK."
+        ),
+        inline=False,
+    )
+    if raw.image_urls:
+        embed.set_thumbnail(url=raw.image_urls[0])
+
+    view = AutobuyView(raw.url) if raw.url else None
+    future = asyncio.run_coroutine_threadsafe(
+        channel.send(embed=embed, view=view),
+        bot.loop,
+    )
+    future.add_done_callback(lambda done: done.exception())
+
+
 # ─────────────────────────────────────────────
 # Start
 # ─────────────────────────────────────────────

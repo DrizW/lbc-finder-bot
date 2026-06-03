@@ -1,0 +1,43 @@
+name: "Poussettes premium"
+enabled: true
+min_heat_score: 75
+min_price: 50
+max_price: 800
+
+target_products:
+  - brand: "Cybex"
+    models:
+      - "Priam"
+      - "Balios"
+      - "Mios"
+  - brand: "Babyzen"
+    models:
+      - "Yoyo"
+      - "Yoyo2"
+      - "Yoyo 3"
+  - brand: "Bugaboo"
+    models:
+      - "Fox"
+      - "Dragonfly"
+      - "Donkey"
+  - brand: "Stokke"
+    models:
+      - "Xplory"
+      - "Trailz"
+
+positive_keywords:
+  - "poussette"
+  - "cosy"
+  - "nacelle"
+  - "trio"
+  - "pack naissance"
+  - "bébé"
+
+negative_keywords:
+  - "housse seule"
+  - "adaptateur seul"
+  - "notice"
+  - "jouet"
+  - "miniature"
+  - "recherche"
+  - "donne"
