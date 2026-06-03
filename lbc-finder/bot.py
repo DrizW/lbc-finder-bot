@@ -200,6 +200,32 @@ def _ad_match_text(ad: lbc.Ad) -> str:
     return normalize_for_match(" ".join(parts))
 
 
+def _ad_brand_values(ad: lbc.Ad) -> list[str]:
+    values = []
+    brand_keys = {"brand", "marque", "make", "manufacturer", "fabricant"}
+    for source_name in ("attributes", "options"):
+        source = getattr(ad, source_name, None)
+        if isinstance(source, dict):
+            for key, value in source.items():
+                if normalize_for_match(key) in brand_keys and value is not None:
+                    values.append(str(value))
+        elif isinstance(source, list):
+            for item in source:
+                if not isinstance(item, dict):
+                    continue
+                key = normalize_for_match(
+                    item.get("key") or item.get("name") or item.get("id") or ""
+                )
+                if key not in brand_keys:
+                    continue
+                value = item.get("value") or item.get("values")
+                if isinstance(value, list):
+                    values.extend(str(part) for part in value if part is not None)
+                elif value is not None:
+                    values.append(str(value))
+    return values
+
+
 def _missing_keywords(ad: lbc.Ad, cfg: dict) -> list[str]:
     if cfg.get("filtrage_strict") is False:
         return []
@@ -220,11 +246,19 @@ def _missing_brand(ad: lbc.Ad, cfg: dict) -> str | None:
     if not brand:
         return None
 
-    searchable = _ad_match_text(ad)
     brand_tokens = keyword_tokens(brand)
     if not brand_tokens:
         return None
 
+    structured_brands = _ad_brand_values(ad)
+    if structured_brands:
+        for value in structured_brands:
+            normalized_value = normalize_for_match(value)
+            if all(token in normalized_value for token in brand_tokens):
+                return None
+        return brand
+
+    searchable = _ad_match_text(ad)
     if all(token in searchable for token in brand_tokens):
         return None
     return brand
@@ -404,6 +438,38 @@ def required_tokens_for_mode(keywords: str, mode: str) -> list[str]:
     if mode == "strict":
         return tokens
     return tokens[:4]
+
+
+async def configured_niche_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    needle = normalize_for_match(current)
+    choices = []
+    for name, cfg in load_settings().items():
+        if not isinstance(cfg, dict):
+            continue
+        if needle and needle not in normalize_for_match(name):
+            continue
+        choices.append(app_commands.Choice(name=name[:100], value=name))
+        if len(choices) >= 25:
+            break
+    return choices
+
+
+def delete_configured_niche(niche: str) -> tuple[bool, str]:
+    settings = load_settings()
+    if niche not in settings:
+        return False, f"❌ La niche `{niche}` est introuvable."
+
+    del settings[niche]
+    save_settings(settings)
+    logger.info("[%s] Niche supprimée.", niche)
+
+    if _searcher is not None:
+        _searcher.remove_search_thread(niche)
+
+    return True, f"🗑️ Niche **{niche}** supprimée."
 
 
 @bot.tree.command(
@@ -608,24 +674,18 @@ async def ajouterniche(
 
 @bot.tree.command(name="supprimer-niche", description="Supprime une niche de recherche")
 @app_commands.describe(niche="Nom de la niche à supprimer")
+@app_commands.autocomplete(niche=configured_niche_autocomplete)
 async def supprimerniche(interaction: discord.Interaction, niche: str):
-    settings = load_settings()
-    if niche not in settings:
-        await interaction.response.send_message(
-            f"❌ La niche `{niche}` est introuvable.", ephemeral=True
-        )
-        return
+    _, message = delete_configured_niche(niche)
+    await interaction.response.send_message(message, ephemeral=True)
 
-    del settings[niche]
-    save_settings(settings)
-    logger.info("[%s] Niche supprimée.", niche)
 
-    if _searcher is not None:
-        _searcher.remove_search_thread(niche)
-
-    await interaction.response.send_message(
-        f"🗑️ Niche **{niche}** supprimée.", ephemeral=True
-    )
+@bot.tree.command(name="retirer-niche", description="Retire une seule niche configurée")
+@app_commands.describe(niche="Nom de la niche à retirer")
+@app_commands.autocomplete(niche=configured_niche_autocomplete)
+async def retirerniche(interaction: discord.Interaction, niche: str):
+    _, message = delete_configured_niche(niche)
+    await interaction.response.send_message(message, ephemeral=True)
 
 
 @bot.tree.command(name="vider-niches", description="Supprime toutes les niches configurées")
@@ -656,6 +716,7 @@ async def viderlesniches(interaction: discord.Interaction):
 
 @bot.tree.command(name="pause", description="Met une niche en pause")
 @app_commands.describe(niche="Nom de la niche à mettre en pause")
+@app_commands.autocomplete(niche=configured_niche_autocomplete)
 async def pause(interaction: discord.Interaction, niche: str):
     settings = load_settings()
     if niche not in settings:
@@ -677,6 +738,7 @@ async def pause(interaction: discord.Interaction, niche: str):
 
 @bot.tree.command(name="reprendre", description="Relance une niche en pause")
 @app_commands.describe(niche="Nom de la niche à relancer")
+@app_commands.autocomplete(niche=configured_niche_autocomplete)
 async def reprendre(interaction: discord.Interaction, niche: str):
     settings = load_settings()
     if niche not in settings:
