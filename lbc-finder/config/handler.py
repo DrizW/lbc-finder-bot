@@ -1,12 +1,13 @@
 import lbc
 from analyzers import analyze_listing
+from analyzers.niche_matcher import match_niche
 from bot import (
     get_filter_reason,
     load_settings,
     record_stat,
     send_opportunity_alert_threadsafe,
 )
-from config.niches import load_premium_stroller_niche
+from config.niches import load_niches
 from database.models import RawListing
 from database.repositories import ListingRepository
 from analyzers.text import contains_phrase, joined_text
@@ -70,7 +71,7 @@ def handle(ad: lbc.Ad, search_name: str):
     # Count every ad found
     record_stat(search_name, "found")
     raw = _raw_listing_from_ad(ad)
-    niche = load_premium_stroller_niche()
+    niches = load_niches()
 
     reason = get_filter_reason(ad, cfg)
     if reason:
@@ -80,6 +81,12 @@ def handle(ad: lbc.Ad, search_name: str):
         return
 
     _repository.upsert_raw(raw)
+    niche, niche_score = match_niche(raw, niches)
+    if niche is None:
+        print(f"[{search_name}] 🚫 Aucune niche active ne correspond à l'annonce.")
+        record_stat(search_name, "filtered")
+        return
+
     opportunity = analyze_listing(raw, niche, _repository)
     blocked_reason = _blocked_by_niche(raw, niche)
     min_heat_score = niche.get("min_heat_score", 75)
@@ -98,10 +105,10 @@ def handle(ad: lbc.Ad, search_name: str):
         status = "alerted"
         print(
             f"[{search_name}] 🔥 Opportunité : "
-            f"{opportunity.heat_score}/100 — {raw.title}"
+            f"{opportunity.heat_score}/100 — {niche.get('name')} — {raw.title}"
         )
         record_stat(search_name, "alerted")
-        send_opportunity_alert_threadsafe(opportunity, search_name)
+        send_opportunity_alert_threadsafe(opportunity, search_name, niche.get("name"))
 
     _repository.update_analysis(
         raw,

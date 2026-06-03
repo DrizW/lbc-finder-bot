@@ -2,20 +2,6 @@ from database.models import ListingAnalysis, RawListing
 from .text import contains_phrase, joined_text, normalize
 
 
-PRODUCT_WORDS = ["poussette", "cosy", "nacelle", "trio", "pack naissance", "bébé"]
-ACCESSORIES = [
-    "cosy",
-    "nacelle",
-    "base isofix",
-    "adaptateurs",
-    "housse pluie",
-    "sac de transport",
-    "chancelière",
-    "habillage pluie",
-]
-IMPORTANT_ACCESSORIES = ["cosy", "nacelle"]
-
-
 def identify_product(listing: RawListing, niche: dict) -> ListingAnalysis:
     text = joined_text(listing.title, listing.description, listing.category)
     normalized = normalize(text)
@@ -34,14 +20,25 @@ def identify_product(listing: RawListing, niche: dict) -> ListingAnalysis:
         if detected_model:
             break
 
-    product_hits = [word for word in PRODUCT_WORDS if contains_phrase(normalized, word)]
-    detected_product_type = "poussette" if product_hits else None
+    detected_product_type = None
+    product_hits = []
+    for family in niche.get("product_families", []):
+        hits = [
+            word
+            for word in family.get("synonyms", [])
+            if contains_phrase(normalized, word)
+        ]
+        if hits and detected_product_type is None:
+            detected_product_type = family.get("name")
+        product_hits.extend(hits)
+
+    accessory_keywords = niche.get("accessory_keywords", [])
     accessories = [
-        accessory for accessory in ACCESSORIES if contains_phrase(normalized, accessory)
+        accessory
+        for accessory in accessory_keywords
+        if contains_phrase(normalized, accessory)
     ]
-    missing = [
-        accessory for accessory in IMPORTANT_ACCESSORIES if accessory not in accessories
-    ]
+    missing = []
 
     confidence = 0.2
     if detected_product_type:

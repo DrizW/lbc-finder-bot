@@ -27,7 +27,11 @@ RISK_RULES = {
 }
 
 
-def estimate_condition(title: str, description: str) -> tuple[str | None, list[str]]:
+def estimate_condition(
+    title: str,
+    description: str,
+    risk_keywords: list[str] | None = None,
+) -> tuple[str | None, list[str]]:
     text = normalize(joined_text(title, description))
     condition = None
     for label, phrases in CONDITION_RULES:
@@ -38,4 +42,7 @@ def estimate_condition(title: str, description: str) -> tuple[str | None, list[s
     risks = [
         risk for phrase, risk in RISK_RULES.items() if contains_phrase(text, phrase)
     ]
+    for keyword in risk_keywords or []:
+        if contains_phrase(text, keyword):
+            risks.append(f"vérifier: {keyword}")
     return condition, sorted(set(risks))

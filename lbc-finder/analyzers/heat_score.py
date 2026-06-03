@@ -18,6 +18,7 @@ def calculate_heat_score(
     analysis: ListingAnalysis,
     market: MarketStats,
     margin: MarginEstimate,
+    liquidity_score: int = 0,
 ) -> tuple[int, list[str]]:
     score = 20
     reasons = []
@@ -57,5 +58,9 @@ def calculate_heat_score(
     if analysis.risk_flags:
         score -= min(20, len(analysis.risk_flags) * 6)
         reasons.append("Risques à vérifier")
+
+    if liquidity_score:
+        score += min(10, max(0, liquidity_score))
+        reasons.append("Liquidité de revente favorable")
 
     return max(0, min(100, int(score))), reasons

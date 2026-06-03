@@ -174,16 +174,19 @@ est écrit dans les logs.
 ### Opportunity Engine MVP
 
 Le bot stocke maintenant les annonces détectées dans SQLite (`data/listings.sqlite3`)
-et applique une analyse par règles pour la niche `Poussettes premium` :
+et applique une analyse par règles sur les niches actives de `config/niches.yaml` :
 
 - identification marque/modèle/accessoires
 - estimation d'état et risques à vérifier
-- comparaison aux annonces comparables déjà stockées
+- matching de la niche la plus probable
+- comparaison aux annonces similaires déjà stockées
 - estimation de marge
 - score de chaleur de 0 à 100
 
-Les alertes Discord enrichies sont envoyées uniquement quand le score atteint le
-seuil de la niche (`min_heat_score`, 75 par défaut).
+Chaque niche peut définir `min_heat_score`, plage de prix, familles produit,
+marques/modèles cibles, mots positifs/négatifs, accessoires, risques, liquidité
+et coûts estimés. Les alertes Discord enrichies sont envoyées uniquement quand
+le score atteint le seuil de la niche matchée.
 
 ### Search Parameters
 

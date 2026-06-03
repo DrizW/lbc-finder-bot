@@ -9,9 +9,10 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "lbc-finder"))
 from analyzers.condition_estimator import estimate_condition
 from analyzers.heat_score import calculate_heat_score
 from analyzers.margin_estimator import estimate_margin
+from analyzers.niche_matcher import match_niche
 from analyzers.pipeline import analyze_listing
 from analyzers.product_identifier import identify_product
-from config.niches import load_premium_stroller_niche
+from config.niches import load_niches, load_premium_stroller_niche
 from database.models import ListingAnalysis, MarketStats, RawListing
 from database.repositories import ListingRepository
 
@@ -21,6 +22,7 @@ class AnalyzerTests(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         os.environ["LBC_DATA_DIR"] = self.tmpdir.name
         self.niche = load_premium_stroller_niche()
+        self.niches = load_niches()
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -42,6 +44,21 @@ class AnalyzerTests(unittest.TestCase):
         self.assertEqual(analysis.detected_model, "Priam")
         self.assertIn("cosy", analysis.detected_accessories)
         self.assertGreaterEqual(analysis.identification_confidence, 0.8)
+
+    def test_multi_niche_loader_and_matcher(self):
+        listing = RawListing(
+            platform="leboncoin",
+            external_id="dyson-1",
+            title="Aspirateur balai",
+            description="Dyson V11 avec chargeur et accessoires",
+            price=120,
+        )
+
+        niche, score = match_niche(listing, self.niches)
+
+        self.assertIsNotNone(niche)
+        self.assertEqual(niche["name"], "Aspirateurs Dyson")
+        self.assertGreaterEqual(score, 20)
 
     def test_condition_estimator_detects_condition_and_risks(self):
         condition, risks = estimate_condition(

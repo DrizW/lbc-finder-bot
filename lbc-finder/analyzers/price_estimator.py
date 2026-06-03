@@ -13,6 +13,19 @@ FALLBACK_MARKET = {
     ("Bugaboo", "Donkey"): 620,
     ("Stokke", "Xplory"): 390,
     ("Stokke", "Trailz"): 330,
+    ("Dyson", "V8"): 180,
+    ("Dyson", "V10"): 260,
+    ("Dyson", "V11"): 330,
+    ("Dyson", "V12"): 420,
+    ("Dyson", "V15"): 520,
+    ("Sony", "PS5"): 430,
+    ("Sony", "Playstation 5"): 430,
+    ("Nintendo", "Switch"): 210,
+    ("Nintendo", "Switch OLED"): 280,
+    ("Microsoft", "Xbox Series X"): 330,
+    ("Apple", "iPhone 13"): 380,
+    ("Apple", "iPhone 14"): 520,
+    ("Apple", "iPhone 15"): 690,
 }
 
 

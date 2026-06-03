@@ -13,7 +13,11 @@ def analyze_listing(
     repository: ListingRepository,
 ) -> Opportunity:
     analysis = identify_product(listing, niche)
-    condition, risks = estimate_condition(listing.title, listing.description)
+    condition, risks = estimate_condition(
+        listing.title,
+        listing.description,
+        niche.get("risk_keywords", []),
+    )
     analysis.detected_condition = condition
     analysis.risk_flags = sorted(set(analysis.risk_flags + risks))
 
@@ -24,8 +28,21 @@ def analyze_listing(
         analysis.detected_condition,
     )
     market = with_fallback_market(market, analysis)
-    margin = estimate_margin(listing, market)
-    score, reasons = calculate_heat_score(listing, analysis, market, margin)
+    costs = niche.get("default_estimated_costs", {})
+    margin = estimate_margin(
+        listing,
+        market,
+        cleaning_cost=costs.get("cleaning", 15),
+        travel_cost=costs.get("travel", 10),
+        misc_cost=costs.get("misc", 10),
+    )
+    score, reasons = calculate_heat_score(
+        listing,
+        analysis,
+        market,
+        margin,
+        liquidity_score=int(niche.get("liquidity_score", 0)),
+    )
     return Opportunity(
         raw=listing,
         analysis=analysis,

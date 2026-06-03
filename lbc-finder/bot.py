@@ -1007,7 +1007,7 @@ def send_alert_threadsafe(ad: lbc.Ad, search_name: str, is_bargain: bool = False
     future.add_done_callback(_log_send_result)
 
 
-def send_opportunity_alert_threadsafe(opportunity, search_name: str):
+def send_opportunity_alert_threadsafe(opportunity, search_name: str, niche_name: str | None = None):
     channel, channel_error = get_alert_channel()
     if not channel:
         logger.error("[Bot] %s", channel_error)
@@ -1035,6 +1035,7 @@ def send_opportunity_alert_threadsafe(opportunity, search_name: str):
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
     embed.add_field(name="Produit détecté", value=product, inline=False)
+    embed.add_field(name="Niche détectée", value=niche_name or search_name, inline=True)
     embed.add_field(name="Prix annonce", value=f"{raw.price} €", inline=True)
     embed.add_field(
         name="Prix médian observé",

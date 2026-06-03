@@ -1,43 +1,283 @@
-name: "Poussettes premium"
-enabled: true
-min_heat_score: 75
-min_price: 50
-max_price: 800
+niches:
+  - name: "Poussettes premium"
+    enabled: true
+    min_heat_score: 75
+    min_price: 50
+    max_price: 800
+    liquidity_score: 8
+    product_families:
+      - name: "poussette"
+        synonyms:
+          - "poussette"
+          - "cosy"
+          - "nacelle"
+          - "trio"
+          - "pack naissance"
+          - "bébé"
+    target_products:
+      - brand: "Cybex"
+        models:
+          - "Priam"
+          - "Balios"
+          - "Mios"
+      - brand: "Babyzen"
+        models:
+          - "Yoyo"
+          - "Yoyo2"
+          - "Yoyo 3"
+      - brand: "Bugaboo"
+        models:
+          - "Fox"
+          - "Dragonfly"
+          - "Donkey"
+      - brand: "Stokke"
+        models:
+          - "Xplory"
+          - "Trailz"
+    positive_keywords:
+      - "poussette"
+      - "cosy"
+      - "nacelle"
+      - "trio"
+      - "pack naissance"
+    negative_keywords:
+      - "housse seule"
+      - "adaptateur seul"
+      - "notice"
+      - "jouet"
+      - "miniature"
+      - "recherche"
+      - "donne"
+    accessory_keywords:
+      - "cosy"
+      - "nacelle"
+      - "base isofix"
+      - "adaptateurs"
+      - "housse pluie"
+      - "sac de transport"
+      - "chancelière"
+      - "habillage pluie"
+    risk_keywords:
+      - "manque"
+      - "cassé"
+      - "abîmé"
+      - "tache"
+      - "à réparer"
+      - "incomplet"
+      - "sans facture"
+      - "pas testé"
+      - "problème de pliage"
+      - "roue abîmée"
+      - "frein défectueux"
+    default_estimated_costs:
+      cleaning: 15
+      travel: 10
+      misc: 10
 
-target_products:
-  - brand: "Cybex"
-    models:
-      - "Priam"
-      - "Balios"
-      - "Mios"
-  - brand: "Babyzen"
-    models:
-      - "Yoyo"
-      - "Yoyo2"
-      - "Yoyo 3"
-  - brand: "Bugaboo"
-    models:
-      - "Fox"
-      - "Dragonfly"
-      - "Donkey"
-  - brand: "Stokke"
-    models:
-      - "Xplory"
-      - "Trailz"
+  - name: "Aspirateurs Dyson"
+    enabled: true
+    min_heat_score: 75
+    min_price: 40
+    max_price: 600
+    liquidity_score: 9
+    product_families:
+      - name: "aspirateur"
+        synonyms:
+          - "aspirateur"
+          - "dyson"
+          - "balai"
+          - "sans fil"
+    target_products:
+      - brand: "Dyson"
+        models:
+          - "V8"
+          - "V10"
+          - "V11"
+          - "V12"
+          - "V15"
+          - "Gen5"
+    positive_keywords:
+      - "aspirateur"
+      - "dyson"
+      - "balai"
+    negative_keywords:
+      - "brosse seule"
+      - "filtre seul"
+      - "chargeur seul"
+      - "pour pièces"
+      - "cassé"
+      - "recherche"
+    accessory_keywords:
+      - "chargeur"
+      - "station"
+      - "brosse motorisée"
+      - "mini brosse"
+      - "accessoires"
+    risk_keywords:
+      - "batterie faible"
+      - "ne charge plus"
+      - "cassé"
+      - "pour pièces"
+      - "moteur hs"
+    default_estimated_costs:
+      cleaning: 10
+      travel: 10
+      misc: 15
 
-positive_keywords:
-  - "poussette"
-  - "cosy"
-  - "nacelle"
-  - "trio"
-  - "pack naissance"
-  - "bébé"
+  - name: "Consoles"
+    enabled: true
+    min_heat_score: 72
+    min_price: 50
+    max_price: 700
+    liquidity_score: 9
+    product_families:
+      - name: "console"
+        synonyms:
+          - "console"
+          - "playstation"
+          - "xbox"
+          - "switch"
+    target_products:
+      - brand: "Sony"
+        models:
+          - "PS5"
+          - "Playstation 5"
+          - "PS4"
+      - brand: "Microsoft"
+        models:
+          - "Xbox Series X"
+          - "Xbox Series S"
+      - brand: "Nintendo"
+        models:
+          - "Switch"
+          - "Switch OLED"
+    positive_keywords:
+      - "console"
+      - "manette"
+      - "jeu"
+    negative_keywords:
+      - "boîte vide"
+      - "manette seule"
+      - "jeu seul"
+      - "ne s'allume plus"
+      - "pour pièces"
+    accessory_keywords:
+      - "manette"
+      - "câble hdmi"
+      - "boîte"
+      - "jeux"
+      - "dock"
+    risk_keywords:
+      - "ban"
+      - "bannie"
+      - "drift"
+      - "ne s'allume plus"
+      - "lecteur hs"
+      - "pour pièces"
+    default_estimated_costs:
+      cleaning: 10
+      travel: 10
+      misc: 10
 
-negative_keywords:
-  - "housse seule"
-  - "adaptateur seul"
-  - "notice"
-  - "jouet"
-  - "miniature"
-  - "recherche"
-  - "donne"
+  - name: "Smartphones"
+    enabled: true
+    min_heat_score: 78
+    min_price: 80
+    max_price: 1200
+    liquidity_score: 10
+    product_families:
+      - name: "smartphone"
+        synonyms:
+          - "smartphone"
+          - "téléphone"
+          - "iphone"
+          - "samsung"
+    target_products:
+      - brand: "Apple"
+        models:
+          - "iPhone 12"
+          - "iPhone 13"
+          - "iPhone 14"
+          - "iPhone 15"
+      - brand: "Samsung"
+        models:
+          - "Galaxy S22"
+          - "Galaxy S23"
+          - "Galaxy S24"
+    positive_keywords:
+      - "iphone"
+      - "samsung"
+      - "smartphone"
+    negative_keywords:
+      - "coque"
+      - "chargeur seul"
+      - "écran cassé"
+      - "icloud bloqué"
+      - "pour pièces"
+    accessory_keywords:
+      - "boîte"
+      - "chargeur"
+      - "facture"
+      - "coque"
+    risk_keywords:
+      - "icloud"
+      - "bloqué"
+      - "écran cassé"
+      - "batterie faible"
+      - "ne charge plus"
+      - "oxydé"
+    default_estimated_costs:
+      cleaning: 5
+      travel: 10
+      misc: 20
+
+  - name: "Vélos"
+    enabled: true
+    min_heat_score: 70
+    min_price: 50
+    max_price: 2000
+    liquidity_score: 7
+    product_families:
+      - name: "vélo"
+        synonyms:
+          - "vélo"
+          - "vtt"
+          - "vélo électrique"
+          - "vae"
+    target_products:
+      - brand: "Trek"
+        models:
+          - "Marlin"
+          - "Domane"
+      - brand: "Specialized"
+        models:
+          - "Rockhopper"
+          - "Sirrus"
+      - brand: "Decathlon"
+        models:
+          - "Rockrider"
+          - "Riverside"
+    positive_keywords:
+      - "vélo"
+      - "vtt"
+      - "électrique"
+    negative_keywords:
+      - "roue seule"
+      - "cadre seul"
+      - "pour pièces"
+      - "recherche"
+    accessory_keywords:
+      - "chargeur"
+      - "antivol"
+      - "casque"
+      - "porte bagage"
+    risk_keywords:
+      - "batterie hs"
+      - "crevaison"
+      - "frein à régler"
+      - "dérailleur hs"
+      - "volé"
+    default_estimated_costs:
+      cleaning: 20
+      travel: 15
+      misc: 20
