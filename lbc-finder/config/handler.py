@@ -3,6 +3,7 @@ from analyzers import analyze_listing
 from analyzers.niche_matcher import match_niche
 from bot import (
     get_filter_reason,
+    keyword_tokens,
     load_settings,
     record_stat,
     send_opportunity_alert_threadsafe,
@@ -58,6 +59,34 @@ def _blocked_by_niche(raw: RawListing, niche: dict) -> str | None:
     return None
 
 
+def _search_intent_reason(raw: RawListing, cfg: dict) -> str | None:
+    keywords = str(cfg.get("keywords") or "")
+    brand = str(cfg.get("marque") or "")
+    tokens = keyword_tokens(" ".join([keywords, brand]))
+    phrases = [part.strip() for part in [keywords, brand] if str(part or "").strip()]
+    aliases = {
+        "ps5": ["playstation 5"],
+        "ps4": ["playstation 4"],
+        "xbox": ["series x", "series s"],
+        "iphone": ["apple"],
+        "macbook": ["mac book"],
+        "induction": ["plaque induction", "plaque à induction"],
+    }
+    for token in tokens:
+        phrases.append(token)
+        phrases.extend(aliases.get(token, []))
+
+    if not phrases:
+        return None
+
+    text = joined_text(raw.title, raw.description, raw.category)
+    if any(contains_phrase(text, phrase) for phrase in phrases):
+        return None
+
+    expected = ", ".join(tokens[:5] or phrases[:5])
+    return f"hors sujet pour la recherche: aucun mot attendu ({expected})"
+
+
 def handle(ad: lbc.Ad, search_name: str):
     settings = load_settings()
     cfg = settings.get(search_name)
@@ -76,6 +105,13 @@ def handle(ad: lbc.Ad, search_name: str):
     reason = get_filter_reason(ad, cfg)
     if reason:
         print(f"[{search_name}] 🚫 Ignorée — {reason}.")
+        record_stat(search_name, "filtered")
+        _repository.upsert_raw(raw)
+        return
+
+    intent_reason = _search_intent_reason(raw, cfg)
+    if intent_reason:
+        print(f"[{search_name}] 🚫 Ignorée — {intent_reason}.")
         record_stat(search_name, "filtered")
         _repository.upsert_raw(raw)
         return

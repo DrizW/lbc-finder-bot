@@ -1127,6 +1127,78 @@ def send_alert_threadsafe(ad: lbc.Ad, search_name: str, is_bargain: bool = False
     future.add_done_callback(_log_send_result)
 
 
+def _product_context_label(opportunity) -> str:
+    analysis = opportunity.analysis
+    raw = opportunity.raw
+    return " ".join(
+        part
+        for part in [
+            analysis.detected_brand,
+            analysis.detected_model,
+            analysis.detected_product_type,
+        ]
+        if part
+    ) or raw.title or "votre annonce"
+
+
+def _generic_checks(opportunity) -> list[str]:
+    analysis = opportunity.analysis
+    product_type = normalize_for_match(analysis.detected_product_type)
+
+    if analysis.risk_flags:
+        return analysis.risk_flags
+    if "console" in product_type:
+        return [
+            "vérifier que la console s'allume",
+            "tester les manettes et les ports",
+            "demander si le compte est dissocié",
+            "confirmer les accessoires inclus",
+        ]
+    if "smartphone" in product_type or "telephone" in product_type:
+        return [
+            "vérifier blocage iCloud/Google",
+            "contrôler batterie et écran",
+            "demander facture ou preuve d'achat",
+            "tester charge, son et appareil photo",
+        ]
+    if "aspirateur" in product_type:
+        return [
+            "tester l'aspiration",
+            "vérifier batterie et chargeur",
+            "contrôler brosses et filtres",
+            "demander les accessoires inclus",
+        ]
+    if "induction" in product_type or "cuisson" in product_type:
+        return [
+            "vérifier que toutes les zones chauffent",
+            "contrôler fissures ou rayures profondes",
+            "demander référence exacte et dimensions",
+            "confirmer disponibilité du câble ou branchement",
+        ]
+    if "poussette" in product_type:
+        return [
+            "vérifier pliage et verrouillage",
+            "contrôler roues et freins",
+            "vérifier textile et accessoires",
+            "demander facture si disponible",
+        ]
+    return [
+        "vérifier l'état réel sur place",
+        "demander si tout fonctionne correctement",
+        "confirmer les accessoires inclus",
+        "demander facture ou preuve d'achat si disponible",
+    ]
+
+
+def _seller_message(opportunity) -> str:
+    product = _product_context_label(opportunity)
+    return (
+        f"Bonjour, votre {product} est-il toujours disponible ?\n"
+        "Est-ce que tout fonctionne correctement et y a-t-il des défauts à signaler ? "
+        "Je peux me déplacer rapidement si tout est OK."
+    )
+
+
 def send_opportunity_alert_threadsafe(opportunity, search_name: str, niche_name: str | None = None):
     channel, channel_error = get_alert_channel()
     if not channel:
@@ -1203,12 +1275,7 @@ def send_opportunity_alert_threadsafe(opportunity, search_name: str, niche_name:
         value="\n".join(f"- {reason}" for reason in opportunity.reasons) or "- Score suffisant",
         inline=False,
     )
-    checks = analysis.risk_flags or [
-        "vérifier freins",
-        "vérifier roues",
-        "vérifier pliage",
-        "vérifier textile",
-    ]
+    checks = _generic_checks(opportunity)
     embed.add_field(
         name="Points à vérifier",
         value="\n".join(f"- {risk}" for risk in checks),
@@ -1216,11 +1283,7 @@ def send_opportunity_alert_threadsafe(opportunity, search_name: str, niche_name:
     )
     embed.add_field(
         name="Message vendeur suggéré",
-        value=(
-            "Bonjour, votre poussette est-elle toujours disponible ?\n"
-            "Est-ce qu’elle se plie correctement et est-ce que les roues/freins "
-            "sont en bon état ? Je peux me déplacer rapidement si tout est OK."
-        ),
+        value=_seller_message(opportunity),
         inline=False,
     )
     if raw.image_urls:
