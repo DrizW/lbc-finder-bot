@@ -26,6 +26,20 @@ def _ad_field(ad, *names, default=None):
     return default
 
 
+def _format_location(location) -> str:
+    if not location:
+        return ""
+    for attr in ("city_label", "city", "zipcode", "department_name", "region_name"):
+        value = getattr(location, attr, None)
+        if value:
+            return str(value)
+    if isinstance(location, dict):
+        for key in ("city_label", "city", "zipcode", "department_name", "region_name"):
+            if location.get(key):
+                return str(location[key])
+    return str(location)
+
+
 def _raw_listing_from_ad(ad) -> RawListing:
     images = _ad_field(ad, "images", default=[]) or []
     if isinstance(images, str):
@@ -36,7 +50,7 @@ def _raw_listing_from_ad(ad) -> RawListing:
         title=str(_ad_field(ad, "subject", "title", default="")),
         description=str(_ad_field(ad, "body", "description", default="")),
         price=_ad_field(ad, "price", default=None),
-        location=str(_ad_field(ad, "location", default="")),
+        location=_format_location(_ad_field(ad, "location", default="")),
         category=str(_ad_field(ad, "category", default="")),
         url=str(_ad_field(ad, "url", default="")),
         image_urls=list(images),
@@ -127,7 +141,7 @@ def handle(ad: lbc.Ad, search_name: str):
 
     opportunity = analyze_listing(raw, niche, _repository)
     blocked_reason = _blocked_by_niche(raw, niche)
-    min_heat_score = niche.get("min_heat_score", 75)
+    min_heat_score = cfg.get("min_heat_score", niche.get("min_heat_score", 75))
     status = "ignored"
 
     if blocked_reason:

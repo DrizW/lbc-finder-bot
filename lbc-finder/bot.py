@@ -361,10 +361,19 @@ def _build_search(name: str, cfg: dict):
     from config.handler import handle
     from model import Search, Parameters
 
+    return Search(
+        name=name,
+        parameters=Parameters(**_search_parameters_kwargs(name, cfg)),
+        delay=60,
+        handler=handle,
+        sources=parse_sources(cfg.get("sources")),
+    )
+
+
+def _search_parameters_kwargs(name: str, cfg: dict) -> dict:
     query = f"{cfg.get('keywords', name)} {cfg.get('marque', '')}".strip()
     params_kwargs = {"text": query}
     max_price = cfg.get("max_price")
-
     if isinstance(max_price, (int, float)) and max_price > 0:
         params_kwargs["price"] = [0, max_price]
 
@@ -381,13 +390,68 @@ def _build_search(name: str, cfg: dict):
     if cfg.get("owner_type") == "private":
         params_kwargs["owner_type"] = lbc.OwnerType.PRIVATE
 
-    return Search(
-        name=name,
-        parameters=Parameters(**params_kwargs),
-        delay=60,
-        handler=handle,
-        sources=parse_sources(cfg.get("sources")),
-    )
+    return params_kwargs
+
+
+def _format_ad_location(ad) -> str:
+    location = _ad_field(ad, "location", default="")
+    if not location:
+        return "Localisation non précisée"
+    for attr in ("city_label", "city", "zipcode", "department_name", "region_name"):
+        value = getattr(location, attr, None)
+        if value:
+            return str(value)
+    if isinstance(location, dict):
+        for key in ("city_label", "city", "zipcode", "department_name", "region_name"):
+            if location.get(key):
+                return str(location[key])
+    return str(location)
+
+
+def _parse_ad_datetime(ad):
+    value = _ad_field(ad, "index_date", "published_at", "created_at", default=None)
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, datetime.date):
+        return datetime.datetime.combine(value, datetime.time.min)
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.datetime.fromtimestamp(value)
+        except (OSError, ValueError):
+            return None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        return datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.datetime.strptime(raw[: len(fmt)], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _is_today_or_unknown(ad) -> bool:
+    published = _parse_ad_datetime(ad)
+    if published is None:
+        return True
+    if published.tzinfo is not None:
+        published = published.astimezone().replace(tzinfo=None)
+    return published.date() == datetime.datetime.now().date()
+
+
+def _ad_date_label(ad) -> str:
+    published = _parse_ad_datetime(ad)
+    if published is None:
+        return "date non précisée"
+    return published.strftime("%d/%m/%Y %H:%M")
 
 
 # ─────────────────────────────────────────────
@@ -838,6 +902,112 @@ async def diagnostic(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+@bot.tree.command(
+    name="annonces-du-jour",
+    description="Affiche les annonces vues aujourd'hui pour une niche configurée",
+)
+@app_commands.describe(
+    niche="Niche à consulter",
+    limite="Nombre maximum d'annonces à afficher",
+)
+@app_commands.autocomplete(niche=configured_niche_autocomplete)
+async def annoncesdujour(
+    interaction: discord.Interaction,
+    niche: str,
+    limite: int = 10,
+):
+    await interaction.response.defer(ephemeral=True)
+    settings = load_settings()
+    cfg = settings.get(niche)
+    if not isinstance(cfg, dict):
+        await interaction.followup.send(
+            f"❌ La niche `{niche}` est introuvable.",
+            ephemeral=True,
+        )
+        return
+
+    limite = max(1, min(20, limite))
+
+    def run_lookup():
+        from config.handler import _raw_listing_from_ad, _search_intent_reason
+
+        search = Search(
+            name=niche,
+            parameters=Parameters(**_search_parameters_kwargs(niche, cfg)),
+            delay=60,
+            handler=lambda _ad, _name: None,
+            sources=parse_sources(cfg.get("sources")),
+        )
+        rows = []
+        errors = []
+        for source_name in search.sources or ["leboncoin"]:
+            source = get_source(source_name)
+            if source is None:
+                errors.append(f"source inconnue: {source_name}")
+                continue
+            try:
+                ads = source.search(search)
+            except Exception as exc:
+                logger.exception("[%s] Erreur annonces-du-jour source %s", niche, source_name)
+                errors.append(f"{source_name}: {exc}")
+                continue
+
+            for ad in ads:
+                if not _is_today_or_unknown(ad):
+                    continue
+                reason = get_filter_reason(ad, cfg)
+                if not reason:
+                    raw = _raw_listing_from_ad(ad)
+                    reason = _search_intent_reason(raw, cfg)
+                status = f"Filtrée: {reason}" if reason else "Candidate"
+                rows.append((source_name, ad, status))
+                if len(rows) >= limite:
+                    return rows, errors
+        return rows, errors
+
+    rows, errors = await asyncio.get_event_loop().run_in_executor(None, run_lookup)
+
+    location = (
+        f"{cfg.get('city')} ({cfg.get('radius_km', 20)} km)"
+        if cfg.get("city")
+        else "France entière"
+    )
+    embed = discord.Embed(
+        title=f"Annonces du jour - {niche}",
+        description=(
+            f"Mots-clés : `{cfg.get('keywords', niche)}`\n"
+            f"Marque : `{cfg.get('marque') or '—'}`\n"
+            f"Zone : {location}\n"
+            f"Sources : `{', '.join(parse_sources(cfg.get('sources')))}`"
+        ),
+        color=discord.Color.blurple(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+
+    if not rows:
+        detail = "\n".join(errors) if errors else "Aucune annonce du jour trouvée sur cette niche."
+        embed.add_field(name="Résultat", value=detail[:1000], inline=False)
+    else:
+        for source_name, ad, status in rows:
+            title = _ad_field(ad, "subject", "title", default="Annonce")[:80]
+            price = _ad_field(ad, "price", default="?")
+            url = _ad_field(ad, "url", default="")
+            value = (
+                f"Prix : `{price} €`\n"
+                f"Statut : `{status}`\n"
+                f"Date : `{_ad_date_label(ad)}`\n"
+                f"Lieu : `{_format_ad_location(ad)}`\n"
+                f"Source : `{source_name}`"
+            )
+            if url:
+                value += f"\n[Voir l'annonce]({url})"
+            embed.add_field(name=title, value=value[:1000], inline=False)
+        if errors:
+            embed.set_footer(text="Certaines sources ont renvoyé une erreur: " + " | ".join(errors)[:150])
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="alerte-test", description="Envoie une alerte de test dans le salon configuré")
 async def alertetest(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -1227,7 +1397,8 @@ def send_opportunity_alert_threadsafe(opportunity, search_name: str, niche_name:
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
     embed.add_field(name="Produit détecté", value=product, inline=False)
-    embed.add_field(name="Niche détectée", value=niche_name or search_name, inline=True)
+    embed.add_field(name="Recherche configurée", value=search_name, inline=True)
+    embed.add_field(name="Famille détectée", value=niche_name or "recherche libre", inline=True)
     embed.add_field(name="Prix annonce", value=f"{raw.price} €", inline=True)
     embed.add_field(
         name="Prix médian observé",
