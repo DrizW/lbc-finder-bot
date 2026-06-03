@@ -1,5 +1,7 @@
 import copy
 import os
+import re
+import unicodedata
 
 
 DEFAULT_NICHES = [
@@ -216,3 +218,92 @@ def load_premium_stroller_niche() -> dict:
         if niche.get("name") == "Poussettes premium":
             return niche
     return copy.deepcopy(DEFAULT_NICHES[0])
+
+
+def _normalize_for_tokens(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode(
+        "ascii", "ignore"
+    ).decode("ascii")
+    return text.lower()
+
+
+def _keyword_tokens(value: str) -> list[str]:
+    stopwords = {
+        "a",
+        "au",
+        "aux",
+        "avec",
+        "de",
+        "des",
+        "du",
+        "en",
+        "et",
+        "la",
+        "le",
+        "les",
+        "l",
+        "pour",
+        "sur",
+        "un",
+        "une",
+    }
+    tokens = re.findall(r"[a-z0-9]+", _normalize_for_tokens(value))
+    return [token for token in tokens if len(token) > 1 and token not in stopwords]
+
+
+def build_free_search_niche(search_name: str, cfg: dict) -> dict:
+    """Build a permissive niche from a Discord search when YAML has no match."""
+    keywords = str(cfg.get("keywords") or search_name or "").strip()
+    brand = str(cfg.get("marque") or "").strip()
+    tokens = _keyword_tokens(f"{keywords} {brand}")
+    synonyms = []
+    if keywords:
+        synonyms.append(keywords)
+    synonyms.extend(token for token in tokens if token not in synonyms)
+
+    target_products = []
+    if brand:
+        target_products.append({"brand": brand, "models": []})
+
+    return {
+        "name": f"Recherche libre - {search_name}",
+        "enabled": True,
+        "free_search": True,
+        "min_heat_score": int(cfg.get("min_heat_score", 0) or 0),
+        "min_price": None,
+        "max_price": cfg.get("max_price"),
+        "liquidity_score": int(cfg.get("liquidity_score", 5) or 5),
+        "product_families": [
+            {
+                "name": keywords or search_name,
+                "synonyms": synonyms or [search_name],
+            }
+        ],
+        "target_products": target_products,
+        "positive_keywords": synonyms,
+        "negative_keywords": [
+            "recherche",
+            "donne",
+            "boîte vide",
+            "notice seule",
+            "photo non contractuelle",
+        ],
+        "accessory_keywords": [
+            "boîte",
+            "facture",
+            "chargeur",
+            "accessoires",
+            "garantie",
+        ],
+        "risk_keywords": [
+            "cassé",
+            "hs",
+            "pour pièces",
+            "ne fonctionne plus",
+            "à réparer",
+            "bloqué",
+            "pas testé",
+            "incomplet",
+        ],
+        "default_estimated_costs": {"cleaning": 10, "travel": 10, "misc": 10},
+    }

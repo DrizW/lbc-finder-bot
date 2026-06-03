@@ -12,7 +12,7 @@ from analyzers.margin_estimator import estimate_margin
 from analyzers.niche_matcher import match_niche
 from analyzers.pipeline import analyze_listing
 from analyzers.product_identifier import identify_product
-from config.niches import load_niches, load_premium_stroller_niche
+from config.niches import build_free_search_niche, load_niches, load_premium_stroller_niche
 from database.models import ListingAnalysis, MarketStats, RawListing
 from database.repositories import ListingRepository
 
@@ -59,6 +59,34 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIsNotNone(niche)
         self.assertEqual(niche["name"], "Aspirateurs Dyson")
         self.assertGreaterEqual(score, 20)
+
+    def test_broad_yaml_niches_are_available(self):
+        names = {niche["name"] for niche in self.niches}
+
+        self.assertIn("Matériel informatique", names)
+        self.assertIn("Électroménager - cuisson", names)
+
+    def test_free_search_niche_supports_arbitrary_discord_searches(self):
+        listing = RawListing(
+            platform="leboncoin",
+            external_id="induction-1",
+            title="Plaque induction encastrable",
+            description="Fonctionne très bien, facture disponible",
+            price=90,
+        )
+        niche = build_free_search_niche(
+            "Plaque induction",
+            {"keywords": "plaque induction", "max_price": 250, "min_price": 100},
+        )
+        repo = ListingRepository()
+        repo.upsert_raw(listing)
+
+        opportunity = analyze_listing(listing, niche, repo)
+
+        self.assertTrue(niche["free_search"])
+        self.assertEqual(niche["min_heat_score"], 0)
+        self.assertIsNone(niche["min_price"])
+        self.assertEqual(opportunity.analysis.detected_product_type, "plaque induction")
 
     def test_condition_estimator_detects_condition_and_risks(self):
         condition, risks = estimate_condition(

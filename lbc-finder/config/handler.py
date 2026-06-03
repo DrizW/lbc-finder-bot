@@ -7,7 +7,7 @@ from bot import (
     record_stat,
     send_opportunity_alert_threadsafe,
 )
-from config.niches import load_niches
+from config.niches import build_free_search_niche, load_niches
 from database.models import RawListing
 from database.repositories import ListingRepository
 from analyzers.text import contains_phrase, joined_text
@@ -83,9 +83,11 @@ def handle(ad: lbc.Ad, search_name: str):
     _repository.upsert_raw(raw)
     niche, niche_score = match_niche(raw, niches)
     if niche is None:
-        print(f"[{search_name}] 🚫 Aucune niche active ne correspond à l'annonce.")
-        record_stat(search_name, "filtered")
-        return
+        niche = build_free_search_niche(search_name, cfg)
+        print(
+            f"[{search_name}] ℹ️ Aucune niche YAML détectée, "
+            "analyse avec la recherche Discord."
+        )
 
     opportunity = analyze_listing(raw, niche, _repository)
     blocked_reason = _blocked_by_niche(raw, niche)

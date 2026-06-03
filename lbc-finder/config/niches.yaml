@@ -281,3 +281,314 @@ niches:
       cleaning: 20
       travel: 15
       misc: 20
+
+  - name: "Matériel informatique"
+    enabled: true
+    min_heat_score: 68
+    min_price: 20
+    max_price: 2500
+    liquidity_score: 8
+    product_families:
+      - name: "informatique"
+        synonyms:
+          - "pc"
+          - "ordinateur"
+          - "portable"
+          - "macbook"
+          - "carte graphique"
+          - "gpu"
+          - "processeur"
+          - "écran pc"
+          - "ssd"
+          - "nas"
+    target_products:
+      - brand: "Apple"
+        models:
+          - "MacBook Air"
+          - "MacBook Pro"
+          - "Mac Mini"
+      - brand: "Nvidia"
+        models:
+          - "RTX 3060"
+          - "RTX 3070"
+          - "RTX 3080"
+          - "RTX 4070"
+      - brand: "AMD"
+        models:
+          - "Ryzen 5"
+          - "Ryzen 7"
+          - "Ryzen 9"
+    positive_keywords:
+      - "pc"
+      - "ordinateur"
+      - "macbook"
+      - "carte graphique"
+      - "rtx"
+      - "ryzen"
+    negative_keywords:
+      - "clavier seul"
+      - "souris seule"
+      - "câble seul"
+      - "pour pièces"
+      - "ne démarre plus"
+      - "recherche"
+    accessory_keywords:
+      - "facture"
+      - "boîte"
+      - "chargeur"
+      - "garantie"
+    risk_keywords:
+      - "ne démarre plus"
+      - "écran cassé"
+      - "batterie hs"
+      - "pas testé"
+      - "pour pièces"
+      - "minage"
+    default_estimated_costs:
+      cleaning: 10
+      travel: 10
+      misc: 20
+
+  - name: "Électroménager - cuisson"
+    enabled: true
+    min_heat_score: 65
+    min_price: 20
+    max_price: 1000
+    liquidity_score: 7
+    product_families:
+      - name: "électroménager cuisson"
+        synonyms:
+          - "plaque induction"
+          - "plaque à induction"
+          - "four encastrable"
+          - "micro onde"
+          - "lave vaisselle"
+          - "hotte"
+          - "cookeo"
+          - "thermomix"
+    target_products:
+      - brand: "Bosch"
+        models:
+          - "Serie 4"
+          - "Serie 6"
+          - "Serie 8"
+      - brand: "Siemens"
+        models:
+          - "iQ300"
+          - "iQ500"
+      - brand: "Moulinex"
+        models:
+          - "Cookeo"
+      - brand: "Vorwerk"
+        models:
+          - "Thermomix TM5"
+          - "Thermomix TM6"
+    positive_keywords:
+      - "induction"
+      - "encastrable"
+      - "cookeo"
+      - "thermomix"
+      - "bosch"
+      - "siemens"
+    negative_keywords:
+      - "pièce détachée"
+      - "notice"
+      - "ne chauffe plus"
+      - "pour pièces"
+      - "recherche"
+    accessory_keywords:
+      - "facture"
+      - "garantie"
+      - "accessoires"
+      - "câble"
+    risk_keywords:
+      - "ne chauffe plus"
+      - "verre cassé"
+      - "rayé"
+      - "court circuit"
+      - "pour pièces"
+      - "pas testé"
+    default_estimated_costs:
+      cleaning: 15
+      travel: 15
+      misc: 20
+
+  - name: "Outils électroportatifs"
+    enabled: true
+    min_heat_score: 68
+    min_price: 20
+    max_price: 1500
+    liquidity_score: 8
+    product_families:
+      - name: "outil électroportatif"
+        synonyms:
+          - "perceuse"
+          - "visseuse"
+          - "meuleuse"
+          - "scie circulaire"
+          - "scie sauteuse"
+          - "perforateur"
+          - "boulonneuse"
+          - "batterie outil"
+    target_products:
+      - brand: "Makita"
+        models:
+          - "LXT"
+          - "18V"
+      - brand: "Milwaukee"
+        models:
+          - "M18"
+          - "M12"
+      - brand: "DeWalt"
+        models:
+          - "XR"
+          - "18V"
+      - brand: "Bosch"
+        models:
+          - "Professional"
+          - "18V"
+    positive_keywords:
+      - "perceuse"
+      - "visseuse"
+      - "makita"
+      - "milwaukee"
+      - "dewalt"
+      - "bosch pro"
+    negative_keywords:
+      - "batterie seule"
+      - "chargeur seul"
+      - "mallette vide"
+      - "pour pièces"
+      - "recherche"
+    accessory_keywords:
+      - "batterie"
+      - "chargeur"
+      - "mallette"
+      - "coffret"
+      - "embouts"
+    risk_keywords:
+      - "batterie hs"
+      - "charbons"
+      - "ne tourne plus"
+      - "faux contact"
+      - "pour pièces"
+      - "pas testé"
+    default_estimated_costs:
+      cleaning: 10
+      travel: 10
+      misc: 15
+
+  - name: "Sneakers"
+    enabled: true
+    min_heat_score: 70
+    min_price: 20
+    max_price: 1000
+    liquidity_score: 8
+    product_families:
+      - name: "sneakers"
+        synonyms:
+          - "sneakers"
+          - "baskets"
+          - "jordan"
+          - "air max"
+          - "dunk"
+          - "yeezy"
+          - "new balance"
+    target_products:
+      - brand: "Nike"
+        models:
+          - "Air Jordan"
+          - "Dunk"
+          - "Air Max"
+      - brand: "Adidas"
+        models:
+          - "Yeezy"
+          - "Samba"
+      - brand: "New Balance"
+        models:
+          - "990"
+          - "2002R"
+    positive_keywords:
+      - "jordan"
+      - "dunk"
+      - "yeezy"
+      - "samba"
+      - "new balance"
+    negative_keywords:
+      - "lacets seuls"
+      - "boîte seule"
+      - "contrefaçon"
+      - "fake"
+      - "recherche"
+    accessory_keywords:
+      - "boîte"
+      - "facture"
+      - "stockx"
+      - "goat"
+      - "lacets"
+    risk_keywords:
+      - "replica"
+      - "fake"
+      - "contrefaçon"
+      - "très usé"
+      - "semelle décollée"
+    default_estimated_costs:
+      cleaning: 10
+      travel: 10
+      misc: 10
+
+  - name: "Meubles et décoration"
+    enabled: true
+    min_heat_score: 60
+    min_price: 10
+    max_price: 2000
+    liquidity_score: 6
+    product_families:
+      - name: "meuble"
+        synonyms:
+          - "canapé"
+          - "fauteuil"
+          - "table"
+          - "commode"
+          - "buffet"
+          - "vitrine"
+          - "lampe"
+          - "design"
+    target_products:
+      - brand: "Ikea"
+        models:
+          - "Kivik"
+          - "Besta"
+          - "Stockholm"
+      - brand: "Roche Bobois"
+        models:
+          - "Mah Jong"
+      - brand: "USM"
+        models:
+          - "Haller"
+    positive_keywords:
+      - "design"
+      - "vintage"
+      - "bois massif"
+      - "roche bobois"
+      - "usm"
+    negative_keywords:
+      - "housse seule"
+      - "abîmé"
+      - "cassé"
+      - "à restaurer"
+      - "recherche"
+    accessory_keywords:
+      - "facture"
+      - "notice"
+      - "coussins"
+    risk_keywords:
+      - "tache"
+      - "rayure"
+      - "cassé"
+      - "à restaurer"
+      - "manque"
+    default_estimated_costs:
+      cleaning: 20
+      travel: 25
+      misc: 20
