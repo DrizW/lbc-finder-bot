@@ -370,35 +370,70 @@ CONDITION_CHOICES = [
     app_commands.Choice(name="Pour pièces", value="5"),
 ]
 
+MATCH_MODE_CHOICES = [
+    app_commands.Choice(name="Équilibré", value="equilibre"),
+    app_commands.Choice(name="Large", value="large"),
+    app_commands.Choice(name="Strict", value="strict"),
+]
+
+MATCH_MODE_LABELS = {
+    "large": "Large",
+    "equilibre": "Équilibré",
+    "strict": "Strict",
+}
+
+MATCH_MODE_HEAT_SCORES = {
+    "large": 0,
+    "equilibre": 35,
+    "strict": 55,
+}
+
+
+def normalize_match_mode(mode: app_commands.Choice[str] | str | None) -> str:
+    if isinstance(mode, app_commands.Choice):
+        value = mode.value
+    else:
+        value = mode
+    return value if value in MATCH_MODE_LABELS else "equilibre"
+
+
+def required_tokens_for_mode(keywords: str, mode: str) -> list[str]:
+    tokens = keyword_tokens(keywords)
+    if mode == "large":
+        return []
+    if mode == "strict":
+        return tokens
+    return tokens[:4]
+
 
 @bot.tree.command(
     name="ajouter-niche",
-    description="Ajoute ou met à jour une niche de recherche Leboncoin"
+    description="Ajoute une niche de recherche simple ou précise"
 )
 @app_commands.describe(
-    niche="Nom de la niche (ex: Poussette Cybex)",
-    mots_cles="Objet recherché (ex: poussette, siege auto, robot tondeuse)",
-    marque="Marque obligatoire (ex: cybex, bugaboo, stokke)",
-    prix_max="Prix maximum en euros",
-    prix_min="Prix minimum en euros (alerte 🚨 si en dessous, potentielle pépite)",
+    niche="Nom court de la niche (ex: Poussette Cybex, Plaque induction)",
+    mots_cles="Ce que tu veux surveiller (ex: cybex priam, plaque induction, iphone 14)",
+    prix_max="Budget maximum en euros (0 = aucun plafond)",
+    marque="Marque obligatoire si tu veux verrouiller une marque",
+    mode="Large = plus d'alertes, Équilibré = recommandé, Strict = plus sélectif",
+    prix_min="Seuil pépite en euros (0 = désactivé)",
     ville="Ville pour la recherche géolocalisée (laisser vide = France entière)",
     rayon_km="Rayon en km autour de la ville (défaut: 20)",
     particuliers_seulement="Ne montrer que les annonces de particuliers",
-    filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
     sources="Sources à surveiller séparées par virgule: leboncoin, ebay",
 )
-@app_commands.choices(etat=CONDITION_CHOICES)
+@app_commands.choices(etat=CONDITION_CHOICES, mode=MATCH_MODE_CHOICES)
 async def ajouterniche(
     interaction: discord.Interaction,
     niche: str,
     mots_cles: str,
-    prix_max: int,
+    prix_max: int = 0,
     marque: str = "",
+    mode: app_commands.Choice[str] = None,
     prix_min: int = 0,
     ville: str = "",
     rayon_km: int = 20,
     particuliers_seulement: bool = False,
-    filtrage_strict: bool = True,
     sources: str = "leboncoin",
     etat: app_commands.Choice[str] = None,
 ):
@@ -408,6 +443,8 @@ async def ajouterniche(
     marque = normalize_text(marque)
     ville = normalize_text(ville)
     source_names = parse_sources(sources)
+    mode_value = normalize_match_mode(mode)
+    required_tokens = required_tokens_for_mode(mots_cles, mode_value)
 
     if not niche:
         await interaction.followup.send(
@@ -430,9 +467,9 @@ async def ajouterniche(
         )
         return
 
-    if prix_max <= 0:
+    if prix_max < 0:
         await interaction.followup.send(
-            "❌ Le prix maximum doit être supérieur à 0 €.",
+            "❌ Le budget maximum ne peut pas être négatif.",
             ephemeral=True
         )
         return
@@ -444,9 +481,9 @@ async def ajouterniche(
         )
         return
 
-    if prix_min > prix_max:
+    if prix_max and prix_min > prix_max:
         await interaction.followup.send(
-            "❌ Le seuil pépite doit être inférieur ou égal au prix maximum.",
+            "❌ Le seuil pépite doit être inférieur ou égal au budget maximum.",
             ephemeral=True
         )
         return
@@ -461,16 +498,18 @@ async def ajouterniche(
     entry = {
         "keywords": mots_cles,
         "marque": marque,
-        "max_price": prix_max,
+        "max_price": prix_max or None,
         "min_price": prix_min,
+        "mode_match": mode_value,
+        "min_heat_score": MATCH_MODE_HEAT_SCORES[mode_value],
         "city": ville,
         "lat": None,
         "lng": None,
         "radius_km": rayon_km,
         "owner_type": "private" if particuliers_seulement else "all",
         "condition": etat.value if etat and etat.value != "all" else None,
-        "filtrage_strict": filtrage_strict,
-        "mots_obligatoires": keyword_tokens(mots_cles),
+        "filtrage_strict": mode_value != "large",
+        "mots_obligatoires": required_tokens,
         "sources": source_names,
         "paused": False,
     }
@@ -501,7 +540,8 @@ async def ajouterniche(
             and normalize_text(existing.get("keywords", "")).lower() == mots_cles.lower()
             and normalize_text(existing.get("marque", "")).lower() == marque.lower()
             and normalize_text(existing.get("city", "")).lower() == ville.lower()
-            and existing.get("max_price") == prix_max
+            and existing.get("max_price") == (prix_max or None)
+            and existing.get("mode_match", "equilibre") == mode_value
             and parse_sources(existing.get("sources")) == source_names
         ),
         None,
@@ -520,7 +560,7 @@ async def ajouterniche(
         niche,
         mots_cles,
         marque or "non définie",
-        prix_max,
+        prix_max or "aucun",
         prix_min,
         ville or "France entière",
         rayon_km,
@@ -544,17 +584,23 @@ async def ajouterniche(
         extras.append(f"🚨 Alerte pépite sous `{prix_min} €`")
     if etat and etat.value != "all":
         extras.append(f"🏷️ État : `{etat.name}`")
-    if filtrage_strict:
-        extras.append("🎯 Filtrage strict activé")
+    extras.append(f"🎯 Mode : `{MATCH_MODE_LABELS[mode_value]}`")
+    if required_tokens:
+        extras.append(f"🧩 Mots exigés : `{', '.join(required_tokens)}`")
     extras.append(f"🌐 Sources : `{', '.join(source_names)}`")
+    budget_line = (
+        f"💶 Budget max : `{prix_max} €`\n"
+        if prix_max
+        else "💶 Budget max : `aucun`\n"
+    )
 
     await interaction.followup.send(
         f"✅ Niche **{niche}** ajoutée !\n"
         f"🔍 Mots-clés : `{mots_cles}`\n"
         + (f"🏷️ Marque : `{marque}`\n" if marque else "")
         + f"🌐 Sources : `{', '.join(source_names)}`\n"
-        + f"💶 Prix max : `{prix_max} €`\n"
-        f"📍 Localisation : {location_info}"
+        + budget_line
+        + f"📍 Localisation : {location_info}"
         + (("\n" + "\n".join(extras)) if extras else ""),
         ephemeral=True
     )
@@ -792,25 +838,25 @@ async def statistiques(interaction: discord.Interaction):
 @app_commands.describe(
     mots_cles="Objet recherché (ex: poussette, siege auto, robot tondeuse)",
     marque="Marque obligatoire (ex: cybex, bugaboo, stokke)",
+    mode="Large = plus de résultats, Équilibré = recommandé, Strict = plus sélectif",
     ville="Ville (optionnel)",
     rayon_km="Rayon en km (défaut: 20)",
     prix_max="Prix maximum en euros (0 = aucun filtre)",
     prix_min="Seuil pépite en euros (0 = désactivé)",
     particuliers_seulement="Ne montrer que les annonces de particuliers",
-    filtrage_strict="Exige que les mots-clés importants soient présents dans l'annonce",
     sources="Sources à tester séparées par virgule: leboncoin, ebay",
 )
-@app_commands.choices(etat=CONDITION_CHOICES)
+@app_commands.choices(etat=CONDITION_CHOICES, mode=MATCH_MODE_CHOICES)
 async def tester(
     interaction: discord.Interaction,
     mots_cles: str,
     marque: str = "",
+    mode: app_commands.Choice[str] = None,
     ville: str = "",
     rayon_km: int = 20,
     prix_max: int = 0,
     prix_min: int = 0,
     particuliers_seulement: bool = False,
-    filtrage_strict: bool = True,
     sources: str = "leboncoin",
     etat: app_commands.Choice[str] = None,
 ):
@@ -819,6 +865,8 @@ async def tester(
     marque = normalize_text(marque)
     ville = normalize_text(ville)
     source_names = parse_sources(sources)
+    mode_value = normalize_match_mode(mode)
+    required_tokens = required_tokens_for_mode(mots_cles, mode_value)
 
     if not mots_cles:
         await interaction.followup.send(
@@ -847,8 +895,9 @@ async def tester(
         "condition": etat.value if etat and etat.value != "all" else None,
         "keywords": mots_cles,
         "marque": marque,
-        "filtrage_strict": filtrage_strict,
-        "mots_obligatoires": keyword_tokens(mots_cles),
+        "mode_match": mode_value,
+        "filtrage_strict": mode_value != "large",
+        "mots_obligatoires": required_tokens,
         "sources": source_names,
     }
 
@@ -894,6 +943,7 @@ async def tester(
         description=(
             f"📍 {location_info}\n"
             f"🌐 Sources : **{', '.join(source_names)}**\n"
+            f"🎯 Mode : **{MATCH_MODE_LABELS[mode_value]}**\n"
             f"📋 **{total} annonce(s)** trouvée(s)."
         ),
         color=discord.Color.orange()
